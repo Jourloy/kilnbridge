@@ -3,8 +3,9 @@
 ## Publisher setup
 
 The official repository embeds its Ed25519 public key in `internal/update/release.pub`.
-The corresponding private key must remain outside Git and be stored as the GitHub
-Actions repository secret `UPDATE_SIGNING_KEY` (base64, one line). Keep an offline backup.
+The corresponding private key must remain outside Git. It can stay on the publisher's
+machine for local signing, or be stored as the GitHub Actions repository secret
+`UPDATE_SIGNING_KEY` (base64, one line) for automatic CI signing. Keep an offline backup.
 Losing this key means existing installations cannot trust new releases.
 
 A fork must generate its own key **before its first distributed build**:
@@ -35,7 +36,19 @@ git push origin v0.2.0
 The release workflow reruns CI, including native Windows tests and a real Flutter
 build. It cross-compiles Windows x64 and sender binaries for macOS/Linux, signs the
 Windows update, and uploads the complete set to a draft GitHub release. The release
-becomes public only after all assets are present. Do not reuse published tags.
+becomes public only after all assets are present and signed. If `UPDATE_SIGNING_KEY`
+is absent, CI leaves an unsigned draft; it is never offered to running applications.
+Sign and publish that draft on your own machine with the locally held private key:
+
+```sh
+./scripts/publish-signed-release.sh v0.2.0
+```
+
+Run it from a clean checkout at the release tag. It downloads the CI-built Windows EXE,
+creates the signature locally, uploads only public metadata, and publishes the draft.
+The key is never sent to GitHub. This route needs Go, Git, the GitHub CLI, and `shasum`
+on the publisher machine. `KILNBRIDGE_RELEASE_REPO` selects a fork's release repository.
+Client auto-updates work identically with either signing route. Do not reuse published tags.
 
 Required Windows updater assets:
 

@@ -52,7 +52,7 @@ jobs:
             if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
           }
       - name: Validate release wrapper syntax
-        run: bash -n examples/release-both.sh
+        run: bash -n examples/release-both.sh scripts/publish-signed-release.sh
 
   flutter:
     name: Real Flutter Windows build

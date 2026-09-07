@@ -41,14 +41,22 @@ jobs:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          test -n "$UPDATE_SIGNING_KEY" || { echo 'Set the UPDATE_SIGNING_KEY repository secret first.'; exit 1; }
-          go run ./cmd/kilnbridge sign-release --version "${RELEASE_TAG#v}"
+          if [[ -n "$UPDATE_SIGNING_KEY" ]]; then
+            go run ./cmd/kilnbridge sign-release --version "${RELEASE_TAG#v}"
+          else
+            echo 'No signing secret configured. The draft will require local signing before publication.'
+          fi
           cd dist
-          sha256sum kilnbridge-* update.json update.json.sig > SHA256SUMS.txt
+          sha256sum kilnbridge-* > SHA256SUMS.txt
+          if [[ -f update.json.sig ]]; then
+            sha256sum update.json update.json.sig >> SHA256SUMS.txt
+          fi
       - name: Publish all assets together
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           gh release create "$RELEASE_TAG" dist/* --draft --verify-tag --title "Kilnbridge $RELEASE_TAG" --notes-file docs/release-notes.md
-          gh release edit "$RELEASE_TAG" --draft=false
+          if [[ -f dist/update.json.sig ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false
+          fi
