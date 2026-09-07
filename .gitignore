@@ -1,0 +1,8 @@
+/dist/
+/.private/
+.env
+.env.*
+*.env
+*.log
+.DS_Store
+*.syso

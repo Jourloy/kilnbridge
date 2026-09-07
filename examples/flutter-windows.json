@@ -1,0 +1,7 @@
+{
+  "project": "my-app",
+  "workDir": ".",
+  "flutterVersion": "3.41.6",
+  "skipCodegen": true,
+  "skipTests": false
+}

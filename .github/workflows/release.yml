@@ -1,0 +1,54 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: kilnbridge-release
+  cancel-in-progress: false
+jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Build release binaries
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          CGO_ENABLED: '0'
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          release_version="${RELEASE_TAG#v}"
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H windowsgui -X main.version=$release_version" -o dist/kilnbridge-windows-amd64.exe ./cmd/kilnbridge
+          for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64; do
+            target_os="${target%/*}"
+            target_arch="${target#*/}"
+            GOOS="$target_os" GOARCH="$target_arch" go build -trimpath -ldflags="-s -w -X main.version=$release_version" -o "dist/kilnbridge-$target_os-$target_arch" ./cmd/kilnbridge
+          done
+      - name: Sign the Windows update
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test -n "$UPDATE_SIGNING_KEY" || { echo 'Set the UPDATE_SIGNING_KEY repository secret first.'; exit 1; }
+          go run ./cmd/kilnbridge sign-release --version "${RELEASE_TAG#v}"
+          cd dist
+          sha256sum kilnbridge-* update.json update.json.sig > SHA256SUMS.txt
+      - name: Publish all assets together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/* --draft --verify-tag --title "Kilnbridge $RELEASE_TAG" --notes-file docs/release-notes.md
+          gh release edit "$RELEASE_TAG" --draft=false

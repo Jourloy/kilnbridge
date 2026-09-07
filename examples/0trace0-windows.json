@@ -1,0 +1,21 @@
+{
+  "project": "0trace0",
+  "workDir": ".",
+  "flutterVersion": "3.41.6",
+  "prepareScripts": [
+    "scripts/windows/fetch_xray.ps1",
+    "scripts/windows/fetch_webview2.ps1"
+  ],
+  "testPaths": [
+    "test/services/vpn/windows_vpn_service_test.dart",
+    "test/services/vpn/windows_tun_network_test.dart",
+    "test/services/vpn/windows_xray_config_smoke_test.dart",
+    "test/services/xray/xray_config_builder_test.dart"
+  ],
+  "snapshotIncludes": [
+    "test/fixtures/tls/windows_tun_probe_cert.pem",
+    "test/fixtures/tls/windows_tun_probe_key.pem",
+    "test/fixtures/tls/windows_tun_probe_ca.pem"
+  ],
+  "installerScript": "windows/installer/0trace0.iss"
+}

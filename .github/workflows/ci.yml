@@ -1,0 +1,70 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Check formatting and vet
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+      - name: Build packaged executable
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            go build -trimpath -ldflags='-s -w -H windowsgui' -o "$RUNNER_TEMP/kilnbridge.exe" ./cmd/kilnbridge
+            echo "KILNBRIDGE_TEST_EXE=$RUNNER_TEMP/kilnbridge.exe" >> "$GITHUB_ENV"
+          else
+            go build -trimpath -o "$RUNNER_TEMP/kilnbridge" ./cmd/kilnbridge
+            echo "KILNBRIDGE_TEST_EXE=$RUNNER_TEMP/kilnbridge" >> "$GITHUB_ENV"
+          fi
+      - name: Run tests including the real background executable
+        run: go test -race -count=1 -timeout 5m ./...
+      - name: Validate PowerShell syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem internal/build/*.ps1 | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+          }
+      - name: Validate release wrapper syntax
+        run: bash -n examples/release-both.sh
+
+  flutter:
+    name: Real Flutter Windows build
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Provision the actual tools and build a sample app
+        shell: pwsh
+        run: |
+          $env:KILNBRIDGE_SMOKE_TOOLS = Join-Path $env:RUNNER_TEMP 'kilnbridge-tools'
+          go test ./internal/build -run TestWindowsFlutterSmoke -v -count=1 -timeout 40m
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

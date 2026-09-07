@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Kilnbridge — Your build machine, connected</title>
+  <link rel="icon" href="mark.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Application navigation">
+      <a href="#overview" class="brand"><img src="mark.svg" alt="" width="34" height="34"><span>kilnbridge</span></a>
+      <nav><a href="#overview" data-tab="overview" aria-current="page"><span aria-hidden="true">◫</span>Overview</a><a href="#builds" data-tab="builds"><span aria-hidden="true">▤</span>Build history</a><a href="#connection" data-tab="connection"><span aria-hidden="true">⌘</span>Connection</a><a href="#settings" data-tab="settings"><span aria-hidden="true">⚙</span>Settings</a></nav>
+      <div class="sidebar-bottom"><span class="machine-indicator" id="sidebar-status">Connecting</span><p id="sidebar-name">Your Windows machine</p><span id="version">Kilnbridge</span></div>
+    </aside>
+    <main>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section id="overview" class="page" aria-labelledby="overview-title">
+        <header class="page-heading"><div><h1 id="overview-title">A good place<br>to build</h1><p>Send your source. Let this machine take it from here.</p></div><span class="status-pill" id="agent-status">Connecting</span></header>
+        <article class="ready-card">
+          <div><div class="status-line"><span class="signal-dot" aria-hidden="true"></span><span id="ready-title">Connecting to your agent</span></div><h2 id="machine-name">Your build machine</h2><p id="ready-description">Builds run in the background, even after you close this window.</p><a class="button primary" href="#connection">Connect your script <span aria-hidden="true">↗</span></a></div>
+          <img class="bridge-art" src="bridge.svg" alt="" width="260" height="200">
+        </article>
+        <div class="card-grid">
+          <article class="card"><div class="card-title"><h2>Build tools</h2><span class="small-status" id="tools-status">Not checked</span></div><p>Flutter, C++ tools, and packaging. Prepared once, reused for every build.</p><button class="button secondary" id="prepare-tools">Prepare this machine</button><p class="hint" id="tools-hint">The first setup may ask for Windows administrator approval.</p><details id="tools-details"><summary>Setup activity</summary><pre id="tools-log">No setup activity yet.</pre></details></article>
+          <article class="card"><div class="card-title"><h2>Quietly up to date</h2><span class="small-status" id="update-status">Not checked</span></div><p>Signed updates arrive in the background and install when your builds are finished.</p><button class="button secondary" id="check-updates">Check for updates</button><p class="hint" id="update-detail">Your work always comes first.</p></article>
+        </div>
+        <div class="section-heading"><h2>Recent builds</h2><a href="#builds">View history <span aria-hidden="true">↗</span></a></div><div id="recent-builds" class="build-list"></div>
+      </section>
+      <section id="builds" class="page" aria-labelledby="builds-title" hidden><header class="page-heading"><div><h1 id="builds-title">Every build,<br>in its place</h1><p>Follow a running job or pick up a failed upload.</p></div></header><div id="all-builds" class="build-list"></div></section>
+      <section id="connection" class="page" aria-labelledby="connection-title" hidden>
+        <header class="page-heading"><div><h1 id="connection-title">Make the<br>connection</h1><p>Your source travels directly from your script to this machine.</p></div></header>
+        <article class="card connection-card"><div class="card-title"><h2>Agent address</h2><span class="small-status">HTTPS</span></div><label for="address">Choose this machine’s reachable address</label><select id="address"></select><p class="hint">Use a local network or VPN address your other computer can reach. Allow TCP port 8743 through Windows Firewall on your private network.</p><label for="agent-key">Access key</label><div class="input-action"><input id="agent-key" type="password" value="" placeholder="••••••••••••••••••••••••••••••••" readonly autocomplete="off"><button id="show-key" class="button secondary">Show key</button><button id="copy-key" class="button secondary">Copy</button></div><div class="key-actions"><p class="hint">Anyone with this key can submit builds to this PC.</p><button class="text-button" id="rotate-key">Generate a new key</button></div><label for="fingerprint">Certificate fingerprint</label><input id="fingerprint" class="monospace" readonly><p class="hint">Your script checks this fingerprint before sending the key or any files.</p></article>
+        <article class="card"><div class="card-title"><h2>Ready for your .env</h2><button class="button primary" id="copy-env">Copy connection settings</button></div><p>Add these connection settings alongside your API and MinIO credentials. No Git account is needed on this machine.</p><pre class="env-example">KILNBRIDGE_URL="your agent address"
+KILNBRIDGE_KEY="your access key"
+KILNBRIDGE_PIN_SHA256="your certificate fingerprint"</pre></article>
+      </section>
+      <section id="settings" class="page" aria-labelledby="settings-title" hidden>
+        <header class="page-heading"><div><h1 id="settings-title">At home in<br>the background</h1><p>A few preferences, then back to your work.</p></div></header>
+        <form id="settings-form" class="card"><h2>This machine</h2><label for="settings-name">Machine name</label><input id="settings-name" maxlength="80" required><div class="setting-row"><div><label for="autostart">Start with Windows</label><p>Run quietly when you sign in. Closing settings keeps the agent running.</p></div><input type="checkbox" id="autostart" class="switch"></div><div class="setting-row"><div><label for="auto-update">Automatic updates</label><p>Download signed releases and install while idle, after this window closes.</p></div><input type="checkbox" id="auto-update" class="switch"></div><div class="setting-row"><div><label for="paused">Pause new builds</label><p>Finish accepted jobs and stop accepting new source snapshots.</p></div><input type="checkbox" id="paused" class="switch"></div><label for="retention">Keep build history and artifacts</label><select id="retention"><option value="1">1 day</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="90">90 days</option></select><label for="repository">GitHub release repository</label><input id="repository" required pattern="[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"><p class="hint">Updates must be signed by the publisher key included in this application.</p><div class="form-footer"><span id="save-status" role="status"></span><button class="button primary" type="submit">Save preferences</button></div></form><article class="card"><h2>Stop the agent</h2><p>Finish or cancel accepted builds first. Open Kilnbridge again to resume. Your startup preference is kept.</p><button id="stop-agent" class="button secondary">Stop background agent</button></article>
+      </section>
+      <footer class="main-footer"><span>Your code stays between your machines.</span><span>Open source · MIT license</span></footer>
+    </main>
+  </div>
+  <dialog id="job-dialog" aria-labelledby="job-title"><div class="dialog-heading"><div><h2 id="job-title">Build activity</h2><p id="job-stage"></p></div><button class="icon-button" id="close-job" aria-label="Close build activity">×</button></div><pre id="job-log"></pre><div class="dialog-actions"><button class="button secondary" id="cancel-job">Cancel build</button><button class="button primary" id="retry-job">Retry upload</button></div></dialog>
+  <dialog id="rotate-dialog" aria-labelledby="rotate-title"><h2 id="rotate-title">Replace your access key?</h2><p>Connected scripts will need the new key for their next request. Builds already accepted will keep running.</p><div class="dialog-actions"><button class="button secondary" id="keep-key">Keep current key</button><button class="button primary" id="confirm-rotate">Generate new key</button></div></dialog>
+</body>
+</html>
