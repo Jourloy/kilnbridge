@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 func Token() string {
@@ -73,4 +74,18 @@ func AtomicWrite(p string, b []byte, mode os.FileMode) error {
 		return closeErr
 	}
 	return os.Rename(temp, p)
+}
+
+// Windows PowerShell must discover its own modules even when Kilnbridge was
+// launched from PowerShell 7, whose inherited module paths are incompatible.
+func ChildEnvironment() []string {
+	env := make([]string, 0, len(os.Environ()))
+	for _, value := range os.Environ() {
+		name, _, _ := strings.Cut(value, "=")
+		if runtime.GOOS == "windows" && (strings.EqualFold(name, "PSModulePath") || strings.EqualFold(name, "PSModuleAnalysisCachePath")) {
+			continue
+		}
+		env = append(env, value)
+	}
+	return env
 }

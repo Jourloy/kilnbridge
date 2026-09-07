@@ -154,5 +154,6 @@ func CreateShortcut(exe string) error {
 	script := "$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Programs') + '\\Kilnbridge.lnk'); $shortcut.TargetPath = " + PSQuote(exe) + "; $shortcut.Description = 'Kilnbridge build agent'; $shortcut.Save()"
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", EncodedPS(script))
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd.Env = ChildEnvironment()
 	return cmd.Run()
 }

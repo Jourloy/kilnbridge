@@ -27,7 +27,8 @@ jobs:
           go-version-file: go.mod
       - name: Check formatting and vet
         run: |
-          test -z "$(gofmt -l cmd internal)"
+          unformatted="$(gofmt -l cmd internal)"
+          if [[ -n "$unformatted" ]]; then printf '%s\n' "$unformatted"; exit 1; fi
           go vet ./...
       - name: Build packaged executable
         run: |

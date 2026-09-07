@@ -62,7 +62,7 @@ func (r Runner) Prepare(ctx context.Context, version string) error {
 func (r Runner) run(ctx context.Context, dir, file string, args ...string) error {
 	cmd := platform.ShellCommand(ctx, file, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "PUB_CACHE="+filepath.Join(r.Tools, "pub-cache"), "CI=true", "FLUTTER_SUPPRESS_ANALYTICS=true")
+	cmd.Env = append(platform.ChildEnvironment(), "PUB_CACHE="+filepath.Join(r.Tools, "pub-cache"), "CI=true", "FLUTTER_SUPPRESS_ANALYTICS=true")
 	if runtime.GOOS == "windows" {
 		cmd.Env = append(cmd.Env, "PATH="+filepath.Join(r.Tools, "git", "cmd")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
