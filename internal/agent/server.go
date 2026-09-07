@@ -179,10 +179,11 @@ func (a *App) submit(w http.ResponseWriter, r *http.Request) {
 		problem(w, 503, errors.New("this agent is running in development mode; Windows builds require Windows"))
 		return
 	}
-	if e := a.M.Available(); e != nil {
+	if e := a.M.BeginSubmission(); e != nil {
 		problem(w, 409, e)
 		return
 	}
+	defer a.M.EndSubmission()
 	controller := http.NewResponseController(w)
 	_ = controller.SetReadDeadline(time.Now().Add(30 * time.Minute))
 	defer controller.SetReadDeadline(time.Time{})
@@ -291,7 +292,7 @@ func (a *App) LocalHandler(host string) http.Handler {
 	})
 	mux.HandleFunc("POST /admin/stop", func(w http.ResponseWriter, r *http.Request) {
 		if a.Shutdown == nil || !a.M.ReserveStop() {
-			problem(w, 409, errors.New("finish or cancel accepted builds and tool setup before stopping the agent"))
+			problem(w, 409, errors.New("wait for source uploads and tool setup, and finish or cancel accepted builds before stopping the agent"))
 			return
 		}
 		jsonResponse(w, 200, map[string]bool{"ok": true})

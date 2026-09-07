@@ -30,6 +30,7 @@ type Manager struct {
 	toolsStatus string
 	toolsLog    string
 	uiSeen      time.Time
+	incoming    int
 	closing     bool
 	ctx         context.Context
 	buildJob    func(context.Context, build.Runner, string, string, model.Spec) ([]model.Artifact, error)
@@ -416,7 +417,7 @@ func (m *Manager) prune() {
 func (m *Manager) ReserveUpdate() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.active != "" || m.closing || time.Since(m.uiSeen) < 20*time.Second {
+	if m.active != "" || m.incoming != 0 || m.closing || time.Since(m.uiSeen) < 20*time.Second {
 		return false
 	}
 	for _, j := range m.jobs {
@@ -432,7 +433,7 @@ func (m *Manager) ReleaseUpdate() { m.mu.Lock(); m.closing = false; m.mu.Unlock(
 func (m *Manager) ReserveStop() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.active != "" || m.closing {
+	if m.active != "" || m.incoming != 0 || m.closing {
 		return false
 	}
 	for _, j := range m.jobs {
@@ -443,3 +444,17 @@ func (m *Manager) ReserveStop() bool {
 	m.closing = true
 	return true
 }
+
+func (m *Manager) BeginSubmission() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.availableLocked(); err != nil {
+		return err
+	}
+	if m.incoming >= 4 {
+		return errors.New("source upload capacity is full; retry after a transfer finishes")
+	}
+	m.incoming++
+	return nil
+}
+func (m *Manager) EndSubmission() { m.mu.Lock(); m.incoming--; m.mu.Unlock() }

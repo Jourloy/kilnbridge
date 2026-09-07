@@ -233,3 +233,21 @@ func TestPublicJobMetadataDoesNotContainCredentials(t *testing.T) {
 		t.Fatal("public job metadata contains secrets")
 	}
 }
+
+func TestUpdatesAndShutdownWaitForIncomingSources(t *testing.T) {
+	m, err := NewManager(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.BeginSubmission(); err != nil {
+		t.Fatal(err)
+	}
+	if m.ReserveUpdate() || m.ReserveStop() {
+		t.Fatal("interrupted an incoming archive")
+	}
+	m.EndSubmission()
+	if !m.ReserveUpdate() {
+		t.Fatal("finished transfer still blocks updates")
+	}
+	m.ReleaseUpdate()
+}

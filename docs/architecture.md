@@ -24,7 +24,8 @@ dependencies and are provisioned separately on first use.
 `internal/platform` handles DPAPI, process trees, startup, and the native settings window.
 `internal/update` verifies and installs publisher-signed releases.
 
-One build or setup operation runs at a time. Up to 20 active jobs may be queued. A job
+One build or setup operation runs at a time. Up to four source transfers can run
+concurrently; shutdown and updates wait for incoming archives as well as accepted jobs. Up to 20 active jobs may be queued. A job
 has a four-hour timeout; explicit tool setup has a two-hour timeout. Source ZIPs are
 limited to 2 GiB, 100,000 entries, and 8 GiB extracted. Extraction rejects traversal,
 symlinks, NTFS alternate streams, device names, and case-insensitive duplicate paths.
