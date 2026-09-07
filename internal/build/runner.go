@@ -159,7 +159,7 @@ func (r Runner) Build(ctx context.Context, jobDir, id string, s model.Spec) ([]m
 		r.log("Tests were explicitly skipped; the manifest will record testStatus=skipped.")
 	}
 	r.stage("Building Windows x64")
-	if err = r.run(ctx, work, flutter, "build", "windows", "--release", "--target-platform=windows-x64", "--build-name="+s.Version, "--build-number="+s.BuildNumber, "--dart-define=API_URL="+s.APIURL); err != nil {
+	if err = r.run(ctx, work, flutter, "build", "windows", "--release", "--build-name="+s.Version, "--build-number="+s.BuildNumber, "--dart-define=API_URL="+s.APIURL); err != nil {
 		return nil, err
 	}
 	release := filepath.Join(work, "build", "windows", "x64", "runner", "Release")
