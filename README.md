@@ -194,6 +194,11 @@ All Windows app data is under `%LOCALAPPDATA%\Kilnbridge`:
 | `tools/` | Reused toolchains, downloads, and package cache |
 | `updates/` | Verified staged releases and update diagnostics |
 
+- **No window after double-clicking a downloaded EXE:** open the installed app
+  directly with Win+R: `%LOCALAPPDATA%\Kilnbridge\app\kilnbridge.exe`.
+  Earlier launchers could leave the settings window hidden while the worker was
+  running. Download version 0.1.1 or later; existing settings and build data can
+  be kept.
 - **Cannot connect:** check the selected address, private-network firewall rule, VPN,
   agent key, and certificate fingerprint. An expired or mismatched certificate is rejected
   before sending credentials. A new access key does not change the certificate pin.

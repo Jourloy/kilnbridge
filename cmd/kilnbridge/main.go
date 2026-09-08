@@ -25,7 +25,7 @@ import (
 	"github.com/jourloy/kilnbridge/internal/update"
 )
 
-var version = "0.1.0"
+var version = "0.1.1"
 
 func main() {
 	e := run(os.Args[1:])
@@ -108,9 +108,7 @@ func run(args []string) error {
 			if e = platform.CreateShortcut(installed); e != nil {
 				return fmt.Errorf("could not create the Start menu shortcut: %w", e)
 			}
-			cmd := exec.Command(installed, "--data", *dir)
-			platform.Background(cmd)
-			return cmd.Start()
+			return startInstalledUI(installed, *dir)
 		}
 	}
 	if *background {
@@ -158,6 +156,17 @@ func run(args []string) error {
 	defer closeUI()
 	go agent.KeepSettingsOpen(uiCtx, address)
 	return platform.OpenUI(address)
+}
+
+func startInstalledUI(exe, dir string) error {
+	cmd := exec.Command(exe, "--data", dir)
+	// This is the settings window, not the background worker. HideWindow sets
+	// STARTF_USESHOWWINDOW/SW_HIDE, overriding WebView2's first ShowWindow call.
+	// The release EXE already uses the Windows GUI subsystem, so no console opens.
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }
 
 func clientCommand(command string, args []string) error {
