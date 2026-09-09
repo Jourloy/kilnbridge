@@ -3,7 +3,9 @@ package build
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -178,10 +180,6 @@ func (r Runner) Build(ctx context.Context, jobDir, id string, s model.Spec) ([]m
 	if err != nil || len(exe) == 0 {
 		return nil, errors.New("Flutter did not produce a Windows executable")
 	}
-	out := filepath.Join(jobDir, "artifacts")
-	if err = os.Mkdir(out, 0700); err != nil {
-		return nil, err
-	}
 	r.stage("Packaging release")
 	runtimeScript := filepath.Join(r.Tools, "bundle-runtime.ps1")
 	if err = platform.AtomicWrite(runtimeScript, bundleRuntime, 0600); err != nil {
@@ -191,18 +189,43 @@ func (r Runner) Build(ctx context.Context, jobDir, id string, s model.Spec) ([]m
 		return nil, err
 	}
 	base := s.Project + "-" + s.Version + "-windows-x64"
+	if s.ArtifactPaths != nil {
+		if s.InstallerScript != "" {
+			installerDir := filepath.Join(work, "build", "kilnbridge")
+			if err := os.MkdirAll(installerDir, 0700); err != nil {
+				return nil, err
+			}
+			if err := r.buildInstaller(ctx, work, installerDir, base, s); err != nil {
+				return nil, err
+			}
+		}
+		r.stage("Collecting selected artifacts")
+		return collectArtifacts(ctx, jobDir, work, id, s)
+	}
+	out := filepath.Join(jobDir, "artifacts")
+	if err := os.Mkdir(out, 0700); err != nil {
+		return nil, err
+	}
 	if err = ZipDirectory(release, filepath.Join(out, base+".zip")); err != nil {
 		return nil, err
 	}
 	if s.InstallerScript != "" {
-		if err = r.run(ctx, work, filepath.Join(r.Tools, "inno", "ISCC.exe"), "/DMyAppVersion="+s.Version, "/O"+out, "/F"+base+"-setup", filepath.Join(work, filepath.FromSlash(s.InstallerScript))); err != nil {
+		if err := r.buildInstaller(ctx, work, out, base, s); err != nil {
 			return nil, err
 		}
-		if info, e := os.Stat(filepath.Join(out, base+"-setup.exe")); e != nil || info.Size() == 0 {
-			return nil, errors.New("Inno Setup did not produce the installer")
-		}
 	}
+
 	return Manifest(out, id, s)
+}
+
+func (r Runner) buildInstaller(ctx context.Context, work, out, base string, s model.Spec) error {
+	if err := r.run(ctx, work, filepath.Join(r.Tools, "inno", "ISCC.exe"), "/DMyAppVersion="+s.Version, "/O"+out, "/F"+base+"-setup", filepath.Join(work, filepath.FromSlash(s.InstallerScript))); err != nil {
+		return err
+	}
+	if info, err := os.Stat(filepath.Join(out, base+"-setup.exe")); err != nil || info.Size() == 0 {
+		return errors.New("Inno Setup did not produce the installer")
+	}
+	return nil
 }
 
 func hasVersion(pubspec, expected string) bool {
@@ -216,20 +239,31 @@ func hasVersion(pubspec, expected string) bool {
 }
 
 func Manifest(out, id string, s model.Spec) ([]model.Artifact, error) {
-	entries, err := os.ReadDir(out)
+	root, err := os.OpenRoot(out)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	files, err := artifactFiles(context.Background(), root, ".", true)
 	if err != nil {
 		return nil, err
 	}
 	var artifacts []model.Artifact
-	for _, entry := range entries {
-		if entry.IsDir() || (!strings.HasSuffix(entry.Name(), ".zip") && !strings.HasSuffix(entry.Name(), ".exe")) {
-			continue
-		}
-		digest, err := FileSHA256(filepath.Join(out, entry.Name()))
+	for _, name := range files {
+		file, err := root.Open(name)
 		if err != nil {
 			return nil, err
 		}
-		artifacts = append(artifacts, model.Artifact{Name: entry.Name(), SHA256: digest})
+		h := sha256.New()
+		_, err = io.Copy(h, file)
+		closeErr := file.Close()
+		if err != nil {
+			return nil, err
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		artifacts = append(artifacts, model.Artifact{Name: name, SHA256: hex.EncodeToString(h.Sum(nil))})
 	}
 	if len(artifacts) == 0 {
 		return nil, errors.New("release contains no artifacts")

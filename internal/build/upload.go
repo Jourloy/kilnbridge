@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -32,7 +33,10 @@ func Upload(ctx context.Context, out, id string, s model.Spec, artifacts []model
 func uploadFiles(ctx context.Context, out, id string, s model.Spec, artifacts []model.Artifact, log func(string), put func(string, string, string) error) error {
 	names := make([]string, 0, len(artifacts)+2)
 	for _, a := range artifacts {
-		digest, e := FileSHA256(filepath.Join(out, a.Name))
+		if !model.SafeRelativeName(a.Name) || model.ArtifactMetadataPath(a.Name) {
+			return fmt.Errorf("invalid artifact name: %q", a.Name)
+		}
+		digest, e := FileSHA256(filepath.Join(out, filepath.FromSlash(a.Name)))
 		if e != nil {
 			return e
 		}
@@ -46,7 +50,10 @@ func uploadFiles(ctx context.Context, out, id string, s model.Spec, artifacts []
 		if log != nil {
 			log("Uploading " + name)
 		}
-		contentType := "application/octet-stream"
+		contentType := mime.TypeByExtension(path.Ext(name))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
 		if name == "manifest.json" {
 			contentType = "application/json"
 		}
@@ -56,7 +63,7 @@ func uploadFiles(ctx context.Context, out, id string, s model.Spec, artifacts []
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := put(path.Join(s.Storage.Prefix, id, name), filepath.Join(out, name), contentType); err != nil {
+		if err := put(path.Join(s.Storage.Prefix, id, name), filepath.Join(out, filepath.FromSlash(name)), contentType); err != nil {
 			return err
 		}
 	}

@@ -28,6 +28,7 @@ type Command struct {
 }
 
 type Spec struct {
+	ArtifactPaths    []string  `json:"artifacts,omitempty"`
 	Recipe           string    `json:"recipe,omitempty"`
 	Commands         []Command `json:"commands,omitempty"`
 	TestCommands     []Command `json:"testCommands,omitempty"`

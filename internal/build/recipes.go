@@ -44,6 +44,10 @@ func (r Runner) buildRecipe(ctx context.Context, jobDir, work, id string, s mode
 	if s.SkipTests {
 		r.log("Tests were explicitly skipped; the manifest will record testStatus=skipped.")
 	}
+	if s.ArtifactPaths != nil {
+		r.stage("Collecting selected artifacts")
+		return collectArtifacts(ctx, jobDir, work, id, s)
+	}
 	return packageRecipe(jobDir, work, id, s, r.stage)
 }
 

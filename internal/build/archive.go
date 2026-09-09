@@ -30,32 +30,8 @@ func FileSHA256(p string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// Windows normalizes case, device names, trailing dots and spaces. Reject all
-// ambiguous names even when validation runs on another operating system.
 func SafeArchiveName(name string) bool {
-	name = strings.TrimSuffix(name, "/")
-	if !model.Relative(name) || name == "." {
-		return false
-	}
-	for _, part := range strings.Split(name, "/") {
-		if strings.TrimRight(part, ". ") != part || strings.ContainsAny(part, `<>"|?*`) {
-			return false
-		}
-		for _, r := range part {
-			if r < 32 {
-				return false
-			}
-		}
-		base := strings.ToUpper(strings.SplitN(part, ".", 2)[0])
-		if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || base == "CONIN$" || base == "CONOUT$" {
-			return false
-		}
-		runes := []rune(base)
-		if len(runes) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && strings.ContainsRune("123456789¹²³", runes[3]) {
-			return false
-		}
-	}
-	return true
+	return model.SafeRelativeName(strings.TrimSuffix(name, "/"))
 }
 
 func Extract(archive, destination string) error {

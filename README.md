@@ -2,8 +2,8 @@
 
 **Turn your Windows PC into a build machine for your local release script.**
 
-Kilnbridge receives a ZIP of your local source, builds a Flutter Windows release, and
-uploads the installer and portable ZIP directly to MinIO or compatible S3 storage.
+Kilnbridge receives a ZIP of your local source, runs your Windows build recipe, and
+uploads selected files and directories directly to MinIO or compatible S3 storage.
 No GitHub account, repository access, or manual package setup is needed on the worker.
 
 [Download for Windows](https://github.com/Jourloy/kilnbridge/releases/latest/download/kilnbridge-windows-amd64.exe) ·
@@ -19,7 +19,7 @@ No GitHub account, repository access, or manual package setup is needed on the w
 - Receive local source snapshots over pinned HTTPS, including uncommitted changes when explicitly requested.
 - Prepare Flutter, C++ Build Tools, Windows SDK, portable Git, and Inno Setup.
 - Run project preparation scripts, restore locked dependencies, generate code, test, and build Windows x64.
-- Upload artifacts, SHA-256 checksums, and a release manifest to your chosen bucket and prefix.
+- Publish installers, archives, CLI executables, libraries, and test reports, with SHA-256 checksums and a release manifest.
 - Retry a failed upload without compiling again.
 - Download publisher-signed GitHub updates in the background, install while idle, and roll back if the new worker fails to start.
 
@@ -160,7 +160,7 @@ tests are recorded as `skipped`, never as a successful test run.
 Choose [Flutter](examples/flutter-windows.json), [Tauri](examples/tauri-windows.json),
 [Electron](examples/electron-windows.json), [.NET](examples/dotnet-windows.json), or
 [custom commands](examples/custom-windows.json). Use updated sender and agent binaries
-for non-Flutter recipes. See [recipe setup and commands](docs/recipes.md) for tool
+for non-Flutter recipes and explicit artifact lists. See [recipe setup and commands](docs/recipes.md) for tool
 requirements, examples, output packaging, and custom tests.
 
 | Field | Purpose |
@@ -178,13 +178,22 @@ requirements, examples, output packaging, and custom tests.
 | `installerScript` | Optional project-relative Inno `.iss`; receives `MyAppVersion` |
 | `commands` | Custom recipe executable/argument objects, run in order |
 | `testCommands` | Non-Flutter test commands; overrides preset tests |
-| `outputDir` | Non-Flutter directory relative to `workDir`, packaged recursively as ZIP |
+| `outputDir` | Non-Flutter build output directory; packaged as ZIP when `artifacts` is omitted |
+| `artifacts` | Optional list of 1–64 exact files/directories relative to `workDir`, published with their paths and original bytes |
 | `snapshotIncludes` | Exact source-relative file exceptions to the sender's default filter |
 
 Paths use `/` and must stay inside the source tree. Scripts run with the selected
 project as their working directory. MinIO credentials are passed to the agent, not as
 command-line arguments or environment variables to build processes. Because build code
 runs as the same user, this is not a credential isolation boundary.
+
+Use [the mixed-artifacts example](examples/custom-artifacts-windows.json) to publish
+an installer, archive, CLI, library directory, and reports in one job. Explicit
+`artifacts` replaces automatic ZIP packaging for every recipe; directories expand
+recursively. Missing paths, empty selected directories, links, overlapping paths,
+and reserved root metadata names fail the job. Custom recipes with `artifacts` do
+not need `outputDir`. Reports are collected only after successful tests and builds.
+See [artifact selection](docs/recipes.md#artifacts) for details and Flutter installers.
 
 ## Background updates
 

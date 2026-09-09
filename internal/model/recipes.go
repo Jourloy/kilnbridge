@@ -8,6 +8,9 @@ import (
 
 // An omitted recipe preserves the original Flutter contract.
 func (s *Spec) ValidateRecipe() error {
+	if err := s.ValidateArtifacts(); err != nil {
+		return err
+	}
 	if s.Recipe == "" {
 		s.Recipe = "flutter"
 	}
@@ -43,7 +46,8 @@ func (s *Spec) ValidateRecipe() error {
 			s.OutputDir = "publish"
 		}
 	}
-	if !Relative(s.OutputDir) || s.OutputDir == "." || strings.HasPrefix(s.OutputDir, "-") || strings.ContainsAny(s.OutputDir, `<>"|?*`) {
+	needsOutputDir := s.Recipe != "custom" || s.ArtifactPaths == nil || s.OutputDir != ""
+	if needsOutputDir && (!Relative(s.OutputDir) || s.OutputDir == "." || strings.HasPrefix(s.OutputDir, "-") || strings.ContainsAny(s.OutputDir, `<>"|?*`)) {
 		return errors.New("outputDir must name a directory inside workDir, using forward slashes")
 	}
 	if len(s.Commands)+len(s.TestCommands) > 64 {

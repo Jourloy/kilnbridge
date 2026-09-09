@@ -82,9 +82,23 @@ Unknown recipe names, empty custom commands, unsafe output paths and Flutter-onl
 fields on other recipes are rejected. Custom recipes must provide tests or
 explicitly set `skipTests: true`. See [recipe documentation](recipes.md).
 
-The manifest includes `recipe` and records `testStatus`. Non-Flutter output
-files (including nested installers) are packaged into one ZIP, then uploaded
-with checksums and a manifest through the same job lifecycle.
+The manifest includes `recipe` and records `testStatus`. By default, non-Flutter
+output files are packaged into one ZIP. Every recipe also accepts `artifacts`:
+an array of 1–64 exact files/directories relative to `workDir`, such as
+`["dist/setup.msi", "bin/cli.exe", "lib", "reports"]`. This replaces automatic
+packaging with individual uploads retaining the selected paths and original bytes.
+Directories expand recursively. Custom recipes may omit `outputDir` in this mode.
+
+An empty list, unsafe paths, overlaps (case-insensitive), and reserved root metadata
+names are rejected at submission. Missing results, empty selected directories,
+links, and special files fail collection after the build. Test failures stop the
+job before artifact collection. Omit `artifacts` to retain existing packaging.
+See [artifact selection](recipes.md#artifacts) for the full path contract.
+
+Public job and manifest `artifacts` remain arrays of `{ "name": "lib/core.dll",
+"sha256": "..." }`, one entry per file. S3 keys are `PREFIX/JOB_UUID/NAME`, including
+nested directories. Checksums are uploaded after the files and `manifest.json`
+last. A failed upload retains copies for the existing retry endpoint.
 
 ## Read and control jobs
 

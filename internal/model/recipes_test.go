@@ -75,7 +75,7 @@ func TestRejectInvalidRecipes(t *testing.T) {
 }
 
 func TestExamplesMatchTheAgentContract(t *testing.T) {
-	for _, file := range []string{"flutter-windows", "tauri-windows", "electron-windows", "dotnet-windows", "custom-windows"} {
+	for _, file := range []string{"flutter-windows", "tauri-windows", "electron-windows", "dotnet-windows", "custom-windows", "custom-artifacts-windows"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "examples", file+".json"))
 		if err != nil {
 			t.Fatal(err)
