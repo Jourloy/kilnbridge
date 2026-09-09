@@ -93,6 +93,12 @@ func ShellCommand(ctx context.Context, file string, args ...string) *exec.Cmd {
 func OpenUI(address string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	name := settingsWindowName(address)
+	lock, err := claimSettingsWindow(name)
+	if err != nil || lock == 0 {
+		return err // An existing window was restored, or its host failed to start.
+	}
+	defer windows.CloseHandle(lock)
 	w := webview2.NewWithOptions(webview2.WebViewOptions{AutoFocus: true, WindowOptions: webview2.WindowOptions{Title: "Kilnbridge", Width: 1160, Height: 850, Center: true}})
 	if w == nil {
 		// The agent does not depend on WebView2. Keep setup accessible on a PC
@@ -100,6 +106,10 @@ func OpenUI(address string) error {
 		return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", address).Start()
 	}
 	defer w.Destroy()
+	if ok, _, err := user32.NewProc("SetPropW").Call(uintptr(w.Window()), uintptr(unsafe.Pointer(name)), 1); ok == 0 {
+		return fmt.Errorf("register settings window: %w", err)
+	}
+	defer user32.NewProc("RemovePropW").Call(uintptr(w.Window()), uintptr(unsafe.Pointer(name)))
 	w.SetSize(760, 600, webview2.HintMin)
 	w.Navigate(address)
 	w.Run()

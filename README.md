@@ -14,7 +14,7 @@ No GitHub account, repository access, or manual package setup is needed on the w
 
 ## What it does
 
-- One Windows EXE with a settings window and a persistent background worker.
+- One Windows EXE with a settings window and a persistent background worker in the system tray.
 - Start at sign-in, pause submissions, show/copy/rotate the access key, and inspect logs.
 - Receive local source snapshots over pinned HTTPS, including uncommitted changes when explicitly requested.
 - Prepare Flutter, C++ Build Tools, Windows SDK, portable Git, and Inno Setup.
@@ -41,6 +41,13 @@ both from one script. Other frameworks and native Windows ARM64 are not implemen
    settings to your development machine's `.env` file.
 5. Allow inbound TCP **8743** on your private network in Windows Firewall. Keep the PC
    awake and connected while building. No router port forwarding is needed on a LAN.
+
+Closing settings leaves the Kilnbridge icon in the system tray near the clock.
+Click the icon to reopen settings, or right-click for **Open Kilnbridge** and
+**Stop background agent**. Opening again restores an existing settings window.
+Stopping is available after source uploads, tool setup, and accepted builds finish;
+the icon disappears when the worker exits. The tray is also available at sign-in
+when **Start with Windows** is enabled.
 
 The settings window uses Windows WebView2. If it is unavailable, settings open in the
 system browser; the worker can still run. Kilnbridge itself needs no Go, Node, Python,
@@ -202,6 +209,9 @@ All Windows app data is under `%LOCALAPPDATA%\Kilnbridge`:
 - **Cannot connect:** check the selected address, private-network firewall rule, VPN,
   agent key, and certificate fingerprint. An expired or mismatched certificate is rejected
   before sending credentials. A new access key does not change the certificate pin.
+- **Cannot see the tray icon:** check the hidden-icons arrow near the Windows clock.
+  Windows may put new icons there; move Kilnbridge into the visible notification area
+  in taskbar settings. Clicking its icon opens settings without restarting the worker.
 - **Setup needs attention:** read **Setup activity**, complete any Windows installer
   prompt/restart, then retry. First setup and dependency restore require internet access.
 - **Build failed:** inspect Build history. Fix the project and submit a new snapshot.

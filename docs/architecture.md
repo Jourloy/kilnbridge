@@ -21,7 +21,7 @@ dependencies and are provisioned separately on first use.
 `internal/agent` owns configuration, authentication, durable jobs, and local settings.
 `internal/build` validates archives, provisions tools, compiles and packages, and uploads.
 `internal/client` snapshots the sender's working tree and pins the worker certificate.
-`internal/platform` handles DPAPI, process trees, startup, and the native settings window.
+`internal/platform` handles DPAPI, process trees, startup, the system tray, and the native settings window.
 `internal/update` verifies and installs publisher-signed releases.
 
 One build or setup operation runs at a time. Up to four source transfers can run
@@ -38,7 +38,13 @@ the upload. Artifacts are verified against their hashes before upload. Checksums
 the manifest are written last, so a manifest never advertises a partially uploaded set.
 
 The application runs for the signed-in user. Closing settings leaves the background
-worker alive. Startup uses the user's Windows Run registry key. Signing out stops the
+worker alive. The worker owns the Windows tray icon and its native message loop,
+including when launched at sign-in. The icon reappears after Explorer restarts and is
+removed during shutdown or update handoff. Clicking it launches the settings host;
+a named per-worker object prevents duplicate hosts and restores an existing window.
+The tray has no settings heartbeat, so a closed settings window still allows idle
+updates. The tray's stop action uses the same idle reservation as the settings API.
+Startup uses the user's Windows Run registry key. Signing out stops the
 worker; this is not a service that runs before login. Sleeping or powering off the PC
 makes it unavailable. The settings screen can pause new submissions or stop an idle
 worker.

@@ -102,16 +102,33 @@ func (a *App) Run(ctx context.Context, nonce string) error {
 	}
 	a.M.Start()
 	go a.updateLoop(ctx)
+	trayDone := make(chan error, 1)
+	go func() {
+		trayDone <- platform.RunTray(ctx, func() error {
+			exe, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			return platform.LaunchSettings(exe, a.M.dir)
+		}, a.stop)
+	}()
 	select {
 	case <-ctx.Done():
 		e = nil
 	case e = <-errCh:
+	case e = <-trayDone:
+		// A broken native message loop must not leave an invisible worker.
+		stop()
+		trayDone = nil
 	}
 	stopCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = localServer.Shutdown(stopCtx)
 	_ = remoteServer.Shutdown(stopCtx)
 	stop()
+	if trayDone != nil {
+		<-trayDone
+	}
 	if a.Shutdown != nil {
 		a.Shutdown()
 	}
@@ -291,12 +308,11 @@ func (a *App) LocalHandler(host string) http.Handler {
 		jsonResponse(w, 200, map[string]any{"config": cfg, "version": a.Version, "platform": runtime.GOOS, "fingerprint": a.Pin, "addresses": addresses(cfg.Listen), "jobs": jobs, "tools": tools, "updates": updates})
 	})
 	mux.HandleFunc("POST /admin/stop", func(w http.ResponseWriter, r *http.Request) {
-		if a.Shutdown == nil || !a.M.ReserveStop() {
-			problem(w, 409, errors.New("wait for source uploads and tool setup, and finish or cancel accepted builds before stopping the agent"))
+		if err := a.stop(); err != nil {
+			problem(w, 409, err)
 			return
 		}
 		jsonResponse(w, 200, map[string]bool{"ok": true})
-		a.Shutdown()
 	})
 	mux.HandleFunc("POST /admin/heartbeat", func(w http.ResponseWriter, r *http.Request) {
 		a.M.mu.Lock()
@@ -394,6 +410,16 @@ func (a *App) LocalHandler(host string) http.Handler {
 		mux.ServeHTTP(w, r)
 	})
 }
+
+// Both the tray and settings must reserve shutdown before cancelling the worker.
+func (a *App) stop() error {
+	if a.Shutdown == nil || !a.M.ReserveStop() {
+		return errors.New("wait for source uploads and tool setup, and finish or cancel accepted builds before stopping the agent")
+	}
+	a.Shutdown()
+	return nil
+}
+
 func addresses(listen string) []string {
 	_, port, _ := net.SplitHostPort(listen)
 	out := []string{}

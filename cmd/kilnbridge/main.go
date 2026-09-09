@@ -159,14 +159,7 @@ func run(args []string) error {
 }
 
 func startInstalledUI(exe, dir string) error {
-	cmd := exec.Command(exe, "--data", dir)
-	// This is the settings window, not the background worker. HideWindow sets
-	// STARTF_USESHOWWINDOW/SW_HIDE, overriding WebView2's first ShowWindow call.
-	// The release EXE already uses the Windows GUI subsystem, so no console opens.
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	return cmd.Process.Release()
+	return platform.LaunchSettings(exe, dir)
 }
 
 func clientCommand(command string, args []string) error {

@@ -59,3 +59,8 @@ func Lock(path string) (*os.File, error) {
 }
 
 func CreateShortcut(exe string) error { return nil }
+
+func RunTray(ctx context.Context, open, stop func() error) error {
+	<-ctx.Done()
+	return nil
+}
