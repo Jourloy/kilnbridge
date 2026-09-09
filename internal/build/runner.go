@@ -284,7 +284,10 @@ func Manifest(out, id string, s model.Spec) ([]model.Artifact, error) {
 	if recipe == "" {
 		recipe = "flutter"
 	}
-	m := map[string]any{"recipe": recipe, "buildId": id, "sourceSha": s.SourceSHA, "sourceDirty": s.SourceDirty, "sourceArchiveSha256": s.ArchiveSHA256, "version": s.Version, "buildNumber": s.BuildNumber, "platform": "windows", "platforms": map[string]string{"windows": "success", "android": "skipped"}, "testStatus": testStatus, "artifacts": artifacts}
+	m := map[string]any{"recipe": recipe, "buildId": id, "sourceType": s.SourceKind(), "sourceArchiveSha256": s.ArchiveSHA256, "version": s.Version, "buildNumber": s.BuildNumber, "platform": "windows", "platforms": map[string]string{"windows": "success", "android": "skipped"}, "testStatus": testStatus, "artifacts": artifacts}
+	if s.SourceKind() == "git" {
+		m["sourceSha"], m["sourceDirty"] = s.SourceSHA, s.SourceDirty
+	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return nil, err

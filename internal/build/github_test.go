@@ -21,7 +21,7 @@ type githubTransport func(*http.Request) (*http.Response, error)
 func (f githubTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestGitHubReleaseCreationUploadRetryAndPublication(t *testing.T) {
-	for _, scenario := range []string{"publish", "draft", "upload-retry", "conflict", "bad-url", "forbidden", "missing-commit", "immutable-retry", "canonical-case"} {
+	for _, scenario := range []string{"publish", "draft", "upload-retry", "conflict", "bad-url", "forbidden", "missing-commit", "immutable-retry", "canonical-case", "zip-existing-tag", "folder-missing-tag"} {
 		t.Run(scenario, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "result.zip")
 			data := []byte("synthetic result bundle")
@@ -32,6 +32,12 @@ func TestGitHubReleaseCreationUploadRetryAndPublication(t *testing.T) {
 			digest := hex.EncodeToString(hash[:])
 			result := model.Result{Name: "demo-1.2.3-11111111-2222-4333-8444-555555555555.zip", Size: int64(len(data)), SHA256: digest}
 			s := model.Spec{Publish: "github", SourceSHA: strings.Repeat("a", 40), GitHub: model.GitHubRelease{Repository: "owner/repo", Tag: "v1.2.3", Token: "fake-token", Draft: scenario == "draft"}}
+			if scenario == "zip-existing-tag" {
+				s.SourceType, s.SourceSHA = "zip", ""
+			}
+			if scenario == "folder-missing-tag" {
+				s.SourceType, s.SourceSHA = "folder", ""
+			}
 			var release *githubRelease
 			var asset *githubAsset
 			creates, uploads, deletes, publishes := 0, 0, 0, 0
@@ -58,7 +64,13 @@ func TestGitHubReleaseCreationUploadRetryAndPublication(t *testing.T) {
 						}
 					case r.Method == "GET" && strings.Contains(r.URL.Path, "/git/ref/tags/"):
 						status = 404
+						if scenario == "zip-existing-tag" {
+							status = 200
+						}
 					case r.Method == "GET" && strings.Contains(r.URL.Path, "/commits/"):
+						if s.SourceSHA == "" {
+							t.Fatal("queried a nonexistent source commit")
+						}
 						response = map[string]string{"sha": s.SourceSHA}
 						if scenario == "missing-commit" {
 							status = 404
@@ -67,7 +79,8 @@ func TestGitHubReleaseCreationUploadRetryAndPublication(t *testing.T) {
 						creates++
 						var body map[string]any
 						_ = json.NewDecoder(r.Body).Decode(&body)
-						if body["draft"] != true || body["target_commitish"] != s.SourceSHA {
+						target, hasTarget := body["target_commitish"]
+						if body["draft"] != true || (s.SourceSHA != "" && target != s.SourceSHA) || (s.SourceSHA == "" && hasTarget) {
 							t.Fatal("created a premature or unrelated release")
 						}
 						release = &githubRelease{ID: 10, Tag: s.GitHub.Tag, Draft: true, UploadURL: "https://uploads.github.com/repos/owner/repo/releases/10/assets{?name,label}"}
@@ -132,7 +145,7 @@ func TestGitHubReleaseCreationUploadRetryAndPublication(t *testing.T) {
 					t.Fatal("retry did not reuse release", deletes, creates, uploads)
 				}
 			}
-			if scenario == "conflict" || scenario == "bad-url" || scenario == "forbidden" || scenario == "missing-commit" {
+			if scenario == "conflict" || scenario == "bad-url" || scenario == "forbidden" || scenario == "missing-commit" || scenario == "folder-missing-tag" {
 				if err == nil || uploads != 0 || deletes != 0 || publishes != 0 {
 					t.Fatal("unsafe publication", err)
 				}

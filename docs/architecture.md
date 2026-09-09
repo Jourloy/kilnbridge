@@ -23,7 +23,9 @@ dependencies and are provisioned separately on first use.
 `cmd/kilnbridge` dispatches UI, worker, sender, and internal update-helper modes.
 `internal/agent` owns configuration, authentication, durable jobs, and local settings.
 `internal/build` validates archives, provisions tools, compiles and packages, and uploads.
-`internal/client` snapshots the sender's working tree and pins the worker certificate.
+`internal/client` snapshots Git/ordinary folders or validates a prepared ZIP, then pins
+the worker certificate. Source type and archive hash are recorded without inventing Git
+metadata for folder/ZIP inputs. See [source inputs](sources.md).
 `internal/platform` handles DPAPI, process trees, startup, the system tray, and the native settings window.
 `internal/update` verifies and installs publisher-signed releases.
 

@@ -26,6 +26,7 @@ Example metadata (replace all values with those for the actual snapshot):
   "flutterVersion": "3.41.6",
   "version": "1.2.3",
   "buildNumber": "45",
+  "sourceType": "git",
   "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "sourceDirty": false,
   "archiveSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -43,15 +44,19 @@ Example metadata (replace all values with those for the actual snapshot):
 }
 ```
 
-`archiveSha256` is the SHA-256 of the exact ZIP bytes. `sourceSha` is the local source
-commit; it is metadata supplied by the trusted caller, not proof of a clean checkout.
-The sender computes it locally and records dirty snapshots explicitly. Optional
-`storage.sessionToken` supports temporary S3 credentials.
+`sourceType` is `git`, `folder`, or `zip`. Omitted/empty means `git` for compatibility.
+Every type requires `archiveSha256`, the 64-character lowercase SHA-256 of the exact ZIP
+bytes. Git sources additionally require `sourceSha`, a 40-character lowercase Git commit,
+and may set `sourceDirty: true`. This is caller-supplied provenance, not proof of a clean
+checkout. Folder/ZIP sources omit `sourceSha` and `sourceDirty` (empty/false are accepted);
+nonempty Git metadata for these types is rejected. No placeholder commit is needed.
 
-A caller can create and transfer its own ZIP without Git on either machine. The source
-must include the files required by the selected recipe, preparation scripts, tests,
-and required assets. Flutter needs `pubspec.yaml`, `pubspec.lock` and its Windows project. No credentials or source URLs are fetched by the
-worker. See the README for optional recipe fields.
+A caller can create and transfer its own ZIP with `sourceType: "zip"` without Git on either
+machine. Include the files required by the recipe, scripts, tests, and assets. Flutter
+needs `pubspec.yaml`, `pubspec.lock` and its Windows project. `workDir` is relative to the
+ZIP root; the agent does not strip wrapper folders or fetch source URLs. See [source
+inputs](sources.md) for CLI and external-script examples. Optional `storage.sessionToken`
+supports temporary S3 credentials.
 
 Successful submission returns **202** and a public job object:
 

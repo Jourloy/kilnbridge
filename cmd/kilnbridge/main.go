@@ -165,7 +165,8 @@ func startInstalledUI(exe, dir string) error {
 func clientCommand(command string, args []string) error {
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
 	envPath := f.String("env", "", "literal dotenv file with agent and optional publication credentials")
-	source := f.String("source", ".", "Git working directory to snapshot")
+	sourceType := f.String("source-type", "git", "source format: git, folder, zip")
+	source := f.String("source", ".", "local Git directory, ordinary directory or prepared ZIP")
 	recipe := f.String("recipe", "", "Windows build recipe JSON (flutter, tauri, electron, dotnet, custom)")
 	id := f.String("job", "", "job ID")
 	detach := f.Bool("detach", false, "return after the agent accepts the job")
@@ -180,11 +181,21 @@ func clientCommand(command string, args []string) error {
 		if *output == "" {
 			*output = "source.zip"
 		}
-		sha, dirty, digest, e := client.Snapshot(*source, *output)
+		var snapshotSpec model.Spec
+		if *recipe != "" {
+			data, err := os.ReadFile(*recipe)
+			if err != nil {
+				return err
+			}
+			if err = json.Unmarshal(data, &snapshotSpec); err != nil {
+				return err
+			}
+		}
+		info, e := client.PrepareSource(*sourceType, *source, *output, snapshotSpec.SnapshotIncludes...)
 		if e != nil {
 			return e
 		}
-		return platform.WriteJSON(*output+".json", map[string]any{"sourceSha": sha, "sourceDirty": dirty, "archiveSha256": digest})
+		return platform.WriteJSON(*output+".json", info)
 	}
 	env, e := client.ReadEnv(*envPath)
 	if e != nil {
@@ -248,8 +259,21 @@ func clientCommand(command string, args []string) error {
 	if !model.Relative(s.WorkDir) {
 		return errors.New("recipe workDir must be relative")
 	}
+	temp, e := os.CreateTemp("", "kilnbridge-source-*.zip")
+	if e != nil {
+		return e
+	}
+	archive := temp.Name()
+	_ = temp.Close()
+	defer os.Remove(archive)
+	fmt.Printf("Preparing %s source...\n", *sourceType)
+	sourceInfo, e := client.PrepareSource(*sourceType, *source, archive, s.SnapshotIncludes...)
+	if e != nil {
+		return e
+	}
+	s.SourceType, s.SourceSHA, s.SourceDirty, s.ArchiveSHA256 = sourceInfo.Type, sourceInfo.SHA, sourceInfo.Dirty, sourceInfo.Digest
 	if (s.Recipe == "" || s.Recipe == "flutter") && (s.Version == "" || s.BuildNumber == "") {
-		b, e = os.ReadFile(filepath.Join(*source, filepath.FromSlash(s.WorkDir), "pubspec.yaml"))
+		b, e = client.SourceFile(archive, filepath.ToSlash(filepath.Join(filepath.FromSlash(s.WorkDir), "pubspec.yaml")))
 		if e != nil {
 			return e
 		}
@@ -268,18 +292,6 @@ func clientCommand(command string, args []string) error {
 				break
 			}
 		}
-	}
-	temp, e := os.CreateTemp("", "kilnbridge-source-*.zip")
-	if e != nil {
-		return e
-	}
-	archive := temp.Name()
-	_ = temp.Close()
-	defer os.Remove(archive)
-	fmt.Println("Creating local source snapshot...")
-	s.SourceSHA, s.SourceDirty, s.ArchiveSHA256, e = client.Snapshot(*source, archive, s.SnapshotIncludes...)
-	if e != nil {
-		return e
 	}
 	if s.SourceDirty && !*allowDirty {
 		return errors.New("source has uncommitted changes; pass --allow-dirty to include and record them")

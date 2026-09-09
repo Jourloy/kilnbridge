@@ -57,7 +57,10 @@ func TestCustomRecipeBuildsWithoutFlutterAndStopsOnFailure(t *testing.T) {
 		if fail {
 			testCommand = command("fail")
 		}
-		s := model.Spec{Recipe: "custom", Project: "demo", Version: "1.2.3", BuildNumber: "1", WorkDir: "app", ArchiveSHA256: digest, OutputDir: "release", TestCommands: []model.Command{testCommand}, Commands: []model.Command{command("build")}}
+		s := model.Spec{SourceType: "zip", Recipe: "custom", Project: "demo", Version: "1.2.3", BuildNumber: "1", WorkDir: "app", ArchiveSHA256: digest, OutputDir: "release", TestCommands: []model.Command{testCommand}, Commands: []model.Command{command("build")}}
+		if err := s.Validate(); err != nil {
+			t.Fatal(err)
+		}
 		artifacts, err := (Runner{Tools: filepath.Join(job, "tools")}).Build(context.Background(), job, "job-id", s)
 		if fail {
 			if err == nil {

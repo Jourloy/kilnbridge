@@ -17,7 +17,7 @@ Local builds need no GitHub account or access to remote repositories.
 
 - One Windows EXE with a settings window and a persistent background worker in the system tray.
 - Start at sign-in, pause submissions, show/copy/rotate the access key, and inspect logs.
-- Receive local source snapshots over pinned HTTPS, including uncommitted changes when explicitly requested.
+- Receive local Git folders, ordinary folders, and prepared ZIPs over pinned HTTPS; Git changes can be included explicitly.
 - Prepare Flutter, C++ Build Tools, Windows SDK, portable Git, and Inno Setup.
 - Run project preparation scripts, restore locked dependencies, generate code, test, and build Windows x64.
 - Publish installers, archives, CLI executables, libraries, and test reports, with SHA-256 checksums and a release manifest.
@@ -95,17 +95,18 @@ Copy [the Flutter recipe](examples/flutter-windows.json), set its `project` name
   --env agent.env
 ```
 
-`--source` is an existing local Git working directory. The sender uses local Git to
-identify files and the source commit; it never fetches or pushes. The worker receives
-the archive and never needs access to your repository. Version and build number come
-from the project's `pubspec.yaml` (`version: 1.2.3+45`). Commit `pubspec.lock` so the
-worker can use `flutter pub get --enforce-lockfile`.
+`--source` points to local sources. Choose `--source-type git` (the default),
+`folder` for an ordinary directory, or `zip` for an archive prepared by another script.
+Folder and ZIP modes do not require Git. The agent receives the ZIP and never needs
+access to your repository. Flutter version/build number come from `pubspec.yaml` in
+the frozen archive (`version: 1.2.3+45`). Include `pubspec.lock` so the worker can use
+`flutter pub get --enforce-lockfile`.
 
-Use `--allow-dirty` to include uncommitted local changes and record `sourceDirty: true`.
-Without it, dirty source is rejected. Ignored files, caches, `.env` files, and common
-signing-key formats are excluded. Use exact `snapshotIncludes` paths only for necessary
-source fixtures that would otherwise be filtered. Symlinks and submodules are not
-supported by the snapshot sender. Keep files unchanged while it creates the snapshot.
+For Git sources, use `--allow-dirty` to include uncommitted changes. Git/folder snapshots
+exclude caches and common secrets; `snapshotIncludes` can restore exact required files.
+Prepared ZIPs are checked and sent byte-for-byte without filtering. Use `workDir` to
+select a project nested inside a folder or ZIP. See [source types and external script
+integration](docs/sources.md) for examples, filtering, standalone snapshots and provenance.
 
 The command prints a job ID and streams logs until the selected delivery completes.
 Download mode verifies the result ZIP before reporting success. `--detach` returns

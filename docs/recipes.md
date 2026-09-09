@@ -12,7 +12,8 @@ Copy an example, set `project` and `workDir`, and submit it as usual:
 ```
 
 `workDir` is relative to the submitted source root, so a monorepo can use
-`apps/desktop`. Use forward slashes. Each build runs in a fresh extracted snapshot.
+`apps/desktop`. Use forward slashes. Each build runs in a fresh extracted snapshot. All recipes support [Git folders, ordinary
+folders, and prepared ZIPs](sources.md); source selection belongs to the CLI invocation.
 Non-Flutter recipes require explicit `version` (such as `1.2.3`) and `buildNumber`
 (1–9 digits). Match the project's own version: Tauri and Electron metadata is not
 rewritten. .NET receives `-p:Version`. Flutter reads missing values from `pubspec.yaml`

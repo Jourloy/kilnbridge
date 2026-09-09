@@ -1,7 +1,6 @@
 package client
 
 import (
-	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -16,13 +15,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/jourloy/kilnbridge/internal/build"
 	"github.com/jourloy/kilnbridge/internal/model"
 )
 
@@ -235,114 +231,4 @@ func Excluded(name string) bool {
 		return true
 	}
 	return false
-}
-func Snapshot(source, output string, includeFiles ...string) (string, bool, string, error) {
-	source, e := filepath.Abs(source)
-	if e != nil {
-		return "", false, "", e
-	}
-	cmd := exec.Command("git", "-C", source, "rev-parse", "HEAD")
-	b, e := cmd.Output()
-	if e != nil {
-		return "", false, "", errors.New("source must be in a Git working tree (no remote access is used)")
-	}
-	sha := strings.TrimSpace(string(b))
-	b, e = exec.Command("git", "-C", source, "status", "--porcelain", "--untracked-files=normal", "--", ".").Output()
-	if e != nil {
-		return "", false, "", e
-	}
-	dirty := len(bytes.TrimSpace(b)) > 0
-	b, e = exec.Command("git", "-C", source, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ".").Output()
-	if e != nil {
-		return "", false, "", e
-	}
-	include := map[string]bool{}
-	for _, name := range includeFiles {
-		if !build.SafeArchiveName(name) {
-			return "", false, "", fmt.Errorf("invalid snapshot include: %s", name)
-		}
-		include[name] = true
-	}
-	set := map[string]bool{}
-	for _, p := range strings.Split(string(b), "\x00") {
-		if p != "" && (!Excluded(p) || include[p]) {
-			set[p] = true
-		}
-	}
-	names := make([]string, 0, len(set))
-	for p := range set {
-		names = append(names, p)
-	}
-	sort.Strings(names)
-	f, e := os.Create(output)
-	if e != nil {
-		return "", false, "", e
-	}
-	z := zip.NewWriter(f)
-	for _, name := range names {
-		if !build.SafeArchiveName(name) {
-			e = fmt.Errorf("source contains a filename Windows cannot safely extract: %s", name)
-			break
-		}
-		p := filepath.Join(source, filepath.FromSlash(name))
-		var info os.FileInfo
-		info, e = os.Lstat(p)
-		if os.IsNotExist(e) {
-			e = nil
-			continue
-		}
-		if e != nil {
-			break
-		}
-		if !info.Mode().IsRegular() {
-			e = fmt.Errorf("source contains a symbolic link or special file: %s", name)
-			break
-		}
-		e = addSnapshotFile(z, p, name, info)
-		if e != nil {
-			break
-		}
-	}
-	zerr := z.Close()
-	ferr := f.Close()
-	if e != nil {
-		return "", false, "", e
-	}
-	if zerr != nil {
-		return "", false, "", zerr
-	}
-	if ferr != nil {
-		return "", false, "", ferr
-	}
-	digest, e := build.FileSHA256(output)
-	return sha, dirty, digest, e
-}
-func addSnapshotFile(z *zip.Writer, p, name string, before os.FileInfo) error {
-	f, e := os.Open(p)
-	if e != nil {
-		return e
-	}
-	defer f.Close()
-	h, e := zip.FileInfoHeader(before)
-	if e != nil {
-		return e
-	}
-	h.Name = name
-	h.Method = zip.Deflate
-	w, e := z.CreateHeader(h)
-	if e != nil {
-		return e
-	}
-	n, e := io.Copy(w, f)
-	if e != nil {
-		return e
-	}
-	after, e := f.Stat()
-	if e != nil {
-		return e
-	}
-	if n != before.Size() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
-		return fmt.Errorf("%s changed while archiving; retry after edits finish", name)
-	}
-	return nil
 }

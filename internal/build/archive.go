@@ -40,21 +40,8 @@ func Extract(archive, destination string) error {
 		return err
 	}
 	defer r.Close()
-	if len(r.File) == 0 || len(r.File) > 100000 {
-		return errors.New("archive must contain 1–100000 entries")
-	}
-	seen := map[string]bool{}
-	var total uint64
-	for _, f := range r.File {
-		key := strings.ToLower(strings.TrimSuffix(f.Name, "/"))
-		if !SafeArchiveName(f.Name) || seen[key] || f.Mode()&os.ModeSymlink != 0 || (!f.FileInfo().IsDir() && !f.Mode().IsRegular()) {
-			return fmt.Errorf("unsafe or duplicate archive entry: %q", f.Name)
-		}
-		seen[key] = true
-		if f.UncompressedSize64 > MaxExtractedBytes-total {
-			return errors.New("archive expands beyond the 8 GiB limit")
-		}
-		total += f.UncompressedSize64
+	if err := validateArchiveEntries(r.File); err != nil {
+		return err
 	}
 	if err := os.Mkdir(destination, 0700); err != nil {
 		return fmt.Errorf("extraction needs a fresh directory: %w", err)
@@ -142,4 +129,77 @@ func ZipDirectory(source, destination string) error {
 		return zerr
 	}
 	return ferr
+}
+
+// ValidateArchive checks prepared sources without changing or extracting ZIP bytes.
+func ValidateArchive(archive string) error {
+	info, err := os.Stat(archive)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() > MaxArchiveBytes {
+		return errors.New("source ZIP must be a regular file no larger than 2 GiB")
+	}
+	r, err := zip.OpenReader(archive)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if err = validateArchiveEntries(r.File); err != nil {
+		return err
+	}
+	for _, f := range r.File {
+		reader, err := f.Open()
+		if err != nil {
+			return err
+		}
+		n, copyErr := io.Copy(io.Discard, io.LimitReader(reader, int64(f.UncompressedSize64)+1))
+		closeErr := reader.Close()
+		if copyErr != nil {
+			return fmt.Errorf("invalid ZIP entry %q: %w", f.Name, copyErr)
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if uint64(n) != f.UncompressedSize64 {
+			return errors.New("archive entry size mismatch")
+		}
+	}
+	return nil
+}
+
+func validateArchiveEntries(files []*zip.File) error {
+	if len(files) == 0 || len(files) > 100000 {
+		return errors.New("archive must contain 1–100000 entries")
+	}
+	seen := map[string]bool{}
+	var total uint64
+	for _, f := range files {
+		key := strings.ToLower(strings.TrimSuffix(f.Name, "/"))
+		if !SafeArchiveName(f.Name) || seen[key] || f.Mode()&os.ModeSymlink != 0 || (!f.FileInfo().IsDir() && !f.Mode().IsRegular()) {
+			return fmt.Errorf("unsafe or duplicate archive entry: %q", f.Name)
+		}
+		seen[key] = true
+		if f.UncompressedSize64 > MaxExtractedBytes-total {
+			return errors.New("archive expands beyond the 8 GiB limit")
+		}
+		total += f.UncompressedSize64
+	}
+
+	for _, f := range files {
+		if f.FileInfo().IsDir() {
+			delete(seen, strings.ToLower(strings.TrimSuffix(f.Name, "/")))
+		}
+	}
+	// Reject file/directory conflicts before any extraction, including on Windows.
+	for _, f := range files {
+		parts := strings.Split(strings.TrimSuffix(f.Name, "/"), "/")
+		for i := 1; i < len(parts); i++ {
+			parent := strings.ToLower(strings.Join(parts[:i], "/"))
+			if seen[parent] {
+				return fmt.Errorf("archive path conflicts with a file: %q", f.Name)
+			}
+		}
+	}
+	return nil
 }

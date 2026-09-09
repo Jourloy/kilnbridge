@@ -48,8 +48,9 @@ type Spec struct {
 	FlutterVersion   string        `json:"flutterVersion"`
 	Version          string        `json:"version"`
 	BuildNumber      string        `json:"buildNumber"`
-	SourceSHA        string        `json:"sourceSha"`
-	SourceDirty      bool          `json:"sourceDirty"`
+	SourceType       string        `json:"sourceType,omitempty"`
+	SourceSHA        string        `json:"sourceSha,omitempty"`
+	SourceDirty      bool          `json:"sourceDirty,omitempty"`
 	ArchiveSHA256    string        `json:"archiveSha256"`
 	APIURL           string        `json:"apiUrl"`
 	TestPaths        []string      `json:"testPaths,omitempty"`
@@ -90,8 +91,8 @@ func (s *Spec) Validate() error {
 	if !VersionPattern.MatchString(s.Version) || !regexp.MustCompile(`^[0-9]{1,9}$`).MatchString(s.BuildNumber) {
 		return errors.New("invalid release version or build number")
 	}
-	if !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(s.SourceSHA) || !SHA256Pattern.MatchString(s.ArchiveSHA256) {
-		return errors.New("sourceSha and archiveSha256 must be hexadecimal digests")
+	if err := s.ValidateSource(); err != nil {
+		return err
 	}
 	u, err := url.Parse(s.APIURL)
 	if s.APIURL != "" && (err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil) {

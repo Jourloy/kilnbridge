@@ -83,7 +83,8 @@ that change workflows. Keep the token out of recipe JSON and source control.
 The agent finds the release by tag, including drafts, or creates a new draft.
 An existing Git tag is reused. A new tag requires the snapshot's source commit in
 that GitHub repository; otherwise publication fails. The agent never substitutes
-the default branch for a missing source commit. Dirty snapshots remain recorded
+the default branch for a missing source commit. Folder and ZIP sources require an
+existing tag or release, since they carry no Git commit. Dirty snapshots remain recorded
 in the manifest.
 
 The website selects `draft: true` by default. With `draft: false` (also the API

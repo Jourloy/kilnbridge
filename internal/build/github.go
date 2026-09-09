@@ -72,6 +72,9 @@ func publishGitHub(ctx context.Context, client *http.Client, file string, s mode
 			return "", err
 		}
 		if status == 404 {
+			if s.SourceKind() != "git" || s.SourceSHA == "" {
+				return "", errors.New("folder and ZIP sources require an existing GitHub tag or release; create it before publishing")
+			}
 			status, err = p.request(ctx, "GET", p.base+"/commits/"+s.SourceSHA, nil, "", 0, nil)
 			if err != nil || status != 200 {
 				return "", errors.New("push the source commit to the GitHub repository or create the target tag/release before publishing")
@@ -79,7 +82,11 @@ func publishGitHub(ctx context.Context, client *http.Client, file string, s mode
 		} else if status != 200 {
 			return "", githubStatus(status)
 		}
-		body, _ := json.Marshal(map[string]any{"tag_name": s.GitHub.Tag, "target_commitish": s.SourceSHA, "name": s.GitHub.Tag, "draft": true})
+		payload := map[string]any{"tag_name": s.GitHub.Tag, "name": s.GitHub.Tag, "draft": true}
+		if s.SourceSHA != "" {
+			payload["target_commitish"] = s.SourceSHA
+		}
+		body, _ := json.Marshal(payload)
 		status, err = p.request(ctx, "POST", p.base+"/releases", bytes.NewReader(body), "application/json", int64(len(body)), &release)
 		if err != nil || status != 201 {
 			if err == nil {
