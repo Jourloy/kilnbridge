@@ -3,8 +3,9 @@
 **Turn your Windows PC into a build machine for your local release script.**
 
 Kilnbridge receives a ZIP of your local source, runs your Windows build recipe, and
-uploads selected files and directories directly to MinIO or compatible S3 storage.
-No GitHub account, repository access, or manual package setup is needed on the worker.
+saves your results on the agent, returns them to the sender, or publishes them to
+S3/MinIO or GitHub Releases. No storage account is required.
+Local builds need no GitHub account or access to remote repositories.
 
 [Download for Windows](https://github.com/Jourloy/kilnbridge/releases/latest/download/kilnbridge-windows-amd64.exe) ·
 [All releases and sender CLIs](https://github.com/Jourloy/kilnbridge/releases) ·
@@ -20,7 +21,8 @@ No GitHub account, repository access, or manual package setup is needed on the w
 - Prepare Flutter, C++ Build Tools, Windows SDK, portable Git, and Inno Setup.
 - Run project preparation scripts, restore locked dependencies, generate code, test, and build Windows x64.
 - Publish installers, archives, CLI executables, libraries, and test reports, with SHA-256 checksums and a release manifest.
-- Retry a failed upload without compiling again.
+- Download retained results through the pinned agent connection, including after a failed publication.
+- Retry a failed S3 or GitHub upload without compiling again.
 - Download publisher-signed GitHub updates in the background, install while idle, and roll back if the new worker fails to start.
 
 Recipes build **Flutter, Tauri, Electron, .NET, or custom projects for Windows x64**.
@@ -46,7 +48,7 @@ both from one script. Native Windows ARM64 builds are not implemented.
 Closing settings leaves the Kilnbridge icon in the system tray near the clock.
 Click the icon to reopen settings, or right-click for **Open Kilnbridge** and
 **Stop background agent**. Opening again restores an existing settings window.
-Stopping is available after source uploads, tool setup, and accepted builds finish;
+Stopping is available after source uploads, result downloads, tool setup, and accepted builds finish;
 the icon disappears when the worker exits. The tray is also available at sign-in
 when **Start with Windows** is enabled.
 
@@ -78,11 +80,10 @@ mv kilnbridge-darwin-arm64 kilnbridge
 cp examples/agent.env.example agent.env
 ```
 
-Fill `agent.env` with the connection values from the Windows app, your API URL, and
-MinIO credentials. The bucket must already exist and the endpoint must use HTTPS.
-Credentials should permit uploads to the selected prefix, including multipart uploads.
-Your existing `MINIO_ACCESS_KEY_ID`, `MINIO_SECRET_ACCESS_KEY`, `MINIO_REGION`,
-`MINIO_ENDPOINT`, `MINIO_BUCKET`, and `API_URL` names are supported.
+Fill `agent.env` with the three connection values from the Windows app. This is
+all you need to keep builds on the agent or download them directly. `API_URL` is
+optional for Flutter. S3 `MINIO_*` credentials and `KILNBRIDGE_GITHUB_TOKEN` are
+needed only for their respective publication modes. See [result delivery](docs/publication.md).
 
 Copy [the Flutter recipe](examples/flutter-windows.json), set its `project` name, then run:
 
@@ -90,6 +91,7 @@ Copy [the Flutter recipe](examples/flutter-windows.json), set its `project` name
 ./kilnbridge submit \
   --source /path/to/flutter-app \
   --recipe examples/flutter-windows.json \
+  --publish download \
   --env agent.env
 ```
 
@@ -105,7 +107,8 @@ signing-key formats are excluded. Use exact `snapshotIncludes` paths only for ne
 source fixtures that would otherwise be filtered. Symlinks and submodules are not
 supported by the snapshot sender. Keep files unchanged while it creates the snapshot.
 
-The command prints a job ID and streams logs until upload finishes. `--detach` returns
+The command prints a job ID and streams logs until the selected delivery completes.
+Download mode verifies the result ZIP before reporting success. `--detach` returns
 after acceptance. Closing the sender does not cancel an accepted job:
 
 ```sh
@@ -113,6 +116,7 @@ after acceptance. Closing the sender does not cancel an accepted job:
 ./kilnbridge wait --job YOUR_JOB_UUID --env agent.env
 ./kilnbridge cancel --job YOUR_JOB_UUID --env agent.env
 ./kilnbridge retry-upload --job YOUR_JOB_UUID --env agent.env
+./kilnbridge download --job YOUR_JOB_UUID --env agent.env --output ./result.zip
 ```
 
 Dotenv values are literal; they are not executed or expanded. Values in `--env` override
@@ -140,7 +144,7 @@ KILNBRIDGE_BIN=/path/to/kilnbridge \
 ```
 
 Add the three `KILNBRIDGE_*` connection values to the same local release `.env` first.
-Android signing keys stay on the development machine. The Windows worker uploads to:
+Android signing keys stay on the development machine. With S3 publication selected, the Windows worker uploads to:
 
 ```text
 s3://BUCKET/PREFIX/JOB_UUID/
@@ -165,6 +169,8 @@ requirements, examples, output packaging, and custom tests.
 
 | Field | Purpose |
 | --- | --- |
+| `publish` | `local`, `download`, `s3`, or `github`; no storage defaults to local |
+| `github` | Repository, release tag and optional draft flag; token comes from the sender environment |
 | `recipe` | `flutter` (default), `tauri`, `electron`, `dotnet`, or `custom` |
 | `project` | Filename-safe release name |
 | `workDir` | Project directory inside the ZIP; default `.` |
@@ -183,7 +189,7 @@ requirements, examples, output packaging, and custom tests.
 | `snapshotIncludes` | Exact source-relative file exceptions to the sender's default filter |
 
 Paths use `/` and must stay inside the source tree. Scripts run with the selected
-project as their working directory. MinIO credentials are passed to the agent, not as
+project as their working directory. Publication credentials are passed to the agent, not as
 command-line arguments or environment variables to build processes. Because build code
 runs as the same user, this is not a credential isolation boundary.
 
@@ -244,8 +250,9 @@ All Windows app data is under `%LOCALAPPDATA%\Kilnbridge`:
   remain installed; remove them with Visual Studio Installer if no longer needed.
 
 History retention defaults to seven days and is configurable from one to ninety days.
-Successful uploads remove source files and per-job credentials immediately. Failed
-uploads retain encrypted credentials until retry or retention cleanup. Large tool caches
+Successful jobs remove source files and per-job credentials immediately. Failed
+publications retain encrypted credentials until retry or retention cleanup. Result
+files and their download ZIP remain available until retention cleanup. Large tool caches
 are retained for reuse. The worker does not keep Windows awake automatically.
 
 ## Develop

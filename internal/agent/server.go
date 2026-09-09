@@ -177,6 +177,7 @@ func (a *App) RemoteHandler() http.Handler {
 	mux.HandleFunc("GET /v1/jobs", func(w http.ResponseWriter, r *http.Request) { jsonResponse(w, 200, a.M.List()) })
 	mux.HandleFunc("POST /v1/jobs", a.submit)
 	mux.HandleFunc("GET /v1/jobs/{id}", a.job)
+	mux.HandleFunc("GET /v1/jobs/{id}/result", a.result)
 	mux.HandleFunc("POST /v1/jobs/{id}/cancel", a.cancel)
 	mux.HandleFunc("POST /v1/jobs/{id}/retry-upload", a.retry)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

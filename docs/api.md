@@ -100,19 +100,56 @@ Public job and manifest `artifacts` remain arrays of `{ "name": "lib/core.dll",
 nested directories. Checksums are uploaded after the files and `manifest.json`
 last. A failed upload retains copies for the existing retry endpoint.
 
+## Optional publication
+
+`spec.publish` accepts `local`, `download`, `s3`, or `github`. When omitted, storage
+settings preserve legacy S3 publication; without them, the job completes locally.
+Only S3 jobs require `storage`. GitHub jobs require `github` with `repository`,
+`tag`, `token`, and optional `draft` (default false). The sender injects credentials
+from its environment; recipe JSON contains no token. Unused publisher credentials
+and unknown modes are rejected. See [delivery behavior](publication.md).
+
+After packaging, public jobs include `publish` and `result` metadata:
+
+```json
+{
+  "result": {
+    "name": "my-app-1.2.3-JOB_UUID.zip",
+    "sha256": "HEX_SHA256",
+    "size": 12345
+  }
+}
+```
+
+`GET /v1/jobs/{id}/result` streams this ZIP through the same authenticated, pinned
+connection. The ZIP contains all artifacts and both metadata files. It is available
+as soon as `result` is present, including during/after a failed publication. The
+response supports byte ranges and includes Content-Length, attachment filename,
+and a SHA-256 ETag. Verify the entire downloaded file against `result.sha256` and
+`result.size`. A missing/expired job returns 404; a job with no prepared result or
+full transfer capacity returns 409. There are at most four concurrent downloads.
+Source archives and saved credentials have no download endpoint.
+
+`download` is a sender instruction: the server retains files just as in `local`.
+A waiting sender downloads the ZIP, while detached submissions require a later
+`wait` or `download` call. All modes retain results for the configured period.
+Successful local jobs report their agent-side artifact directory as `destination`;
+S3 jobs report the S3 prefix and GitHub jobs report the release URL.
+
 ## Read and control jobs
 
 | Request | Result |
 | --- | --- |
 | `GET /v1/health` | Name, app version, platform, and pause state |
 | `GET /v1/jobs` | Array of retained public jobs, newest first |
+| `GET /v1/jobs/{id}/result` | Authenticated result ZIP; size and SHA-256 are in the public job |
 | `GET /v1/jobs/{id}` | `{ "job": {...}, "log": "..." }` with the latest 128 KiB of logs |
 | `POST /v1/jobs/{id}/cancel` | Request cancellation; 200 `{ "ok": true }` |
 | `POST /v1/jobs/{id}/retry-upload` | Queue an existing `upload_failed` job; 202 `{ "ok": true }` |
 
 Job states are `queued`, `running`, `succeeded`, `failed`, `upload_failed`, and
-`cancelled`. Only queued/running jobs are active. A successful job includes its
-`s3://bucket/prefix/id/` destination and artifact names/hashes. Saved credentials never
+`cancelled`. Only queued/running jobs are active. A completed build includes retained result metadata and artifact names/hashes.
+Successful external publications also include their destination. Saved credentials never
 appear in job JSON. An active cancellation stops the build process tree; poll until
 a terminal state is observed. Cancellation does not remove already uploaded S3 objects.
 

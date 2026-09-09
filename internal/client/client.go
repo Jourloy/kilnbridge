@@ -162,7 +162,7 @@ func (c *Client) Wait(ctx context.Context, id string, out io.Writer) error {
 		}
 		if !response.Job.Active() {
 			if response.Job.Status == "succeeded" {
-				fmt.Fprintf(out, "\nUploaded: %s\n", response.Job.Destination)
+				fmt.Fprintf(out, "\nResult: %s\n", response.Job.Destination)
 				return nil
 			}
 			return fmt.Errorf("job %s: %s — %s", id, response.Job.Status, response.Job.Error)

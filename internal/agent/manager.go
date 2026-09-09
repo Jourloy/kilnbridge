@@ -31,9 +31,12 @@ type Manager struct {
 	toolsLog    string
 	uiSeen      time.Time
 	incoming    int
+	outgoing    int
+	downloads   map[string]int
 	closing     bool
 	ctx         context.Context
 	buildJob    func(context.Context, build.Runner, string, string, model.Spec) ([]model.Artifact, error)
+	githubJob   func(context.Context, string, model.Spec, model.Result, func(string)) (string, error)
 	uploadJob   func(context.Context, string, string, model.Spec, []model.Artifact, func(string)) error
 }
 
@@ -42,11 +45,12 @@ func NewManager(ctx context.Context, dir string) (*Manager, error) {
 	if e != nil {
 		return nil, e
 	}
-	m := &Manager{dir: dir, config: c, secrets: s, jobs: map[string]model.Job{}, signal: make(chan struct{}, 1), ctx: ctx, toolsStatus: "Not checked"}
+	m := &Manager{dir: dir, config: c, secrets: s, jobs: map[string]model.Job{}, downloads: map[string]int{}, signal: make(chan struct{}, 1), ctx: ctx, toolsStatus: "Not checked"}
 	m.buildJob = func(ctx context.Context, r build.Runner, dir, id string, s model.Spec) ([]model.Artifact, error) {
 		return r.Build(ctx, dir, id, s)
 	}
 	m.uploadJob = build.Upload
+	m.githubJob = build.PublishGitHub
 	if e = os.MkdirAll(filepath.Join(dir, "jobs"), 0700); e != nil {
 		return nil, e
 	}
@@ -131,7 +135,7 @@ func (m *Manager) Add(archive string, s model.Spec) (model.Job, error) {
 	if e := s.Validate(); e != nil {
 		return model.Job{}, e
 	}
-	j := model.Job{ID: platform.ID(), Project: s.Project, Version: s.Version, Status: "queued", Stage: "Queued", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	j := model.Job{Publish: s.Publish, ID: platform.ID(), Project: s.Project, Version: s.Version, Status: "queued", Stage: "Queued", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	dir := m.jobDir(j.ID)
 	if e := os.Mkdir(dir, 0700); e != nil {
 		return j, e
@@ -229,20 +233,24 @@ func (m *Manager) execute(ctx context.Context, j model.Job) {
 		m.change(j.ID, func(j *model.Job) { j.Status = "failed"; j.Error = "Could not decrypt the saved job settings." })
 		return
 	}
-	replacer := strings.NewReplacer(s.Storage.SecretKey, "[redacted]", s.Storage.AccessKey, "[redacted]")
+	var secrets []string
+	for _, value := range []string{s.Storage.SecretKey, s.Storage.AccessKey, s.Storage.SessionToken, s.GitHub.Token} {
+		if value != "" {
+			secrets = append(secrets, value, "[redacted]")
+		}
+	}
+	replacer := strings.NewReplacer(secrets...)
 	var logMu sync.Mutex
 	log := func(line string) {
 		logMu.Lock()
 		defer logMu.Unlock()
 		line = replacer.Replace(line)
-		if s.Storage.SessionToken != "" {
-			line = strings.ReplaceAll(line, s.Storage.SessionToken, "[redacted]")
-		}
 		m.appendLog(j.ID, line)
 	}
 	uploadOnly := j.Stage == "Retrying upload"
 	m.change(j.ID, func(j *model.Job) { j.Status = "running"; j.Error = "" })
 	artifacts := j.Artifacts
+	result := j.Result
 	if !uploadOnly {
 		r := build.Runner{Tools: filepath.Join(m.dir, "tools"), Log: log, Stage: func(stage string) { m.change(j.ID, func(j *model.Job) { j.Stage = stage }) }}
 		artifacts, e = m.buildJob(ctx, r, m.jobDir(j.ID), j.ID, s)
@@ -250,16 +258,36 @@ func (m *Manager) execute(ctx context.Context, j model.Job) {
 			m.change(j.ID, func(j *model.Job) { j.Artifacts = artifacts })
 		}
 	}
+	if e == nil && result == nil {
+		m.change(j.ID, func(j *model.Job) { j.Stage = "Saving downloadable result" })
+		var bundle model.Result
+		bundle, e = build.CreateBundle(ctx, filepath.Join(m.jobDir(j.ID), "artifacts"), filepath.Join(m.jobDir(j.ID), "result.zip"), artifacts)
+		if e == nil {
+			bundle.Name = s.Project + "-" + s.Version + "-" + j.ID + ".zip"
+			result = &bundle
+			m.change(j.ID, func(j *model.Job) { j.Result = result })
+		}
+	}
 	packaged := e == nil
 	if e == nil {
-		m.change(j.ID, func(j *model.Job) { j.Stage = "Uploading to storage" })
-		e = m.uploadJob(ctx, filepath.Join(m.jobDir(j.ID), "artifacts"), j.ID, s, artifacts, log)
+		e = ctx.Err()
+	}
+	destination := filepath.Join(m.jobDir(j.ID), "artifacts")
+	if e == nil {
+		switch s.PublicationMode() {
+		case "s3":
+			m.change(j.ID, func(j *model.Job) { j.Stage = "Uploading to S3" })
+			e = m.uploadJob(ctx, filepath.Join(m.jobDir(j.ID), "artifacts"), j.ID, s, artifacts, log)
+			destination = fmt.Sprintf("s3://%s/%s/%s/", s.Storage.Bucket, s.Storage.Prefix, j.ID)
+		case "github":
+			m.change(j.ID, func(j *model.Job) { j.Stage = "Publishing to GitHub Releases" })
+			destination, e = m.githubJob(ctx, filepath.Join(m.jobDir(j.ID), "result.zip"), s, *result, log)
+		default:
+			log("Result saved on the agent. No external publication requested.")
+		}
 	}
 	if e != nil {
 		message := replacer.Replace(e.Error())
-		if s.Storage.SessionToken != "" {
-			message = strings.ReplaceAll(message, s.Storage.SessionToken, "[redacted]")
-		}
 		log(message)
 		m.change(j.ID, func(j *model.Job) {
 			j.Status = "failed"
@@ -280,7 +308,8 @@ func (m *Manager) execute(ctx context.Context, j model.Job) {
 	m.change(j.ID, func(j *model.Job) {
 		j.Status = "succeeded"
 		j.Stage = "Complete"
-		j.Destination = fmt.Sprintf("s3://%s/%s/%s/", s.Storage.Bucket, s.Storage.Prefix, j.ID)
+		j.Destination = destination
+		j.Publish = s.PublicationMode()
 	})
 	_ = os.Remove(filepath.Join(m.jobDir(j.ID), "spec.bin"))
 	_ = os.Remove(filepath.Join(m.jobDir(j.ID), "source.zip"))
@@ -407,7 +436,7 @@ func (m *Manager) prune() {
 	defer m.mu.Unlock()
 	cutoff := time.Now().Add(-time.Duration(m.config.RetentionDays) * 24 * time.Hour)
 	for id, j := range m.jobs {
-		if !j.Active() && m.active != id && j.UpdatedAt.Before(cutoff) {
+		if !j.Active() && m.active != id && m.downloads[id] == 0 && j.UpdatedAt.Before(cutoff) {
 			if os.RemoveAll(m.jobDir(id)) == nil {
 				delete(m.jobs, id)
 			}
@@ -417,7 +446,7 @@ func (m *Manager) prune() {
 func (m *Manager) ReserveUpdate() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.active != "" || m.incoming != 0 || m.closing || time.Since(m.uiSeen) < 20*time.Second {
+	if m.active != "" || m.incoming != 0 || m.outgoing != 0 || m.closing || time.Since(m.uiSeen) < 20*time.Second {
 		return false
 	}
 	for _, j := range m.jobs {
@@ -433,7 +462,7 @@ func (m *Manager) ReleaseUpdate() { m.mu.Lock(); m.closing = false; m.mu.Unlock(
 func (m *Manager) ReserveStop() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.active != "" || m.incoming != 0 || m.closing {
+	if m.active != "" || m.incoming != 0 || m.outgoing != 0 || m.closing {
 		return false
 	}
 	for _, j := range m.jobs {

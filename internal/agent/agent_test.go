@@ -65,7 +65,14 @@ func TestPinnedSubmissionQueueUploadRetryAndSecretCleanup(t *testing.T) {
 	a.M.buildJob = func(ctx context.Context, r build.Runner, dir, id string, s model.Spec) ([]model.Artifact, error) {
 		builds.Add(1)
 		r.Log("message includes " + s.Storage.SecretKey)
-		return []model.Artifact{{Name: "demo.zip", SHA256: strings.Repeat("b", 64)}}, nil
+		out := filepath.Join(dir, "artifacts")
+		if err := os.Mkdir(out, 0700); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(out, "demo.zip"), []byte("binary"), 0600); err != nil {
+			return nil, err
+		}
+		return build.Manifest(out, id, s)
 	}
 	a.M.uploadJob = func(context.Context, string, string, model.Spec, []model.Artifact, func(string)) error {
 		if uploads.Add(1) == 1 {

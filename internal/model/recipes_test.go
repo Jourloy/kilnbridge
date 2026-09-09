@@ -75,7 +75,7 @@ func TestRejectInvalidRecipes(t *testing.T) {
 }
 
 func TestExamplesMatchTheAgentContract(t *testing.T) {
-	for _, file := range []string{"flutter-windows", "tauri-windows", "electron-windows", "dotnet-windows", "custom-windows", "custom-artifacts-windows"} {
+	for _, file := range []string{"flutter-windows", "tauri-windows", "electron-windows", "dotnet-windows", "custom-windows", "custom-artifacts-windows", "custom-download-windows", "custom-github-windows"} {
 		b, err := os.ReadFile(filepath.Join("..", "..", "examples", file+".json"))
 		if err != nil {
 			t.Fatal(err)
@@ -83,6 +83,12 @@ func TestExamplesMatchTheAgentContract(t *testing.T) {
 		s := recipeSpec()
 		if err = json.Unmarshal(b, &s); err != nil {
 			t.Fatal(err)
+		}
+		if s.Publish != "" && s.Publish != "s3" {
+			s.Storage = Storage{}
+		}
+		if s.Publish == "github" {
+			s.GitHub.Token = "synthetic-test-token"
 		}
 		if err = s.Validate(); err != nil {
 			t.Fatalf("%s: %v", file, err)

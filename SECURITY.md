@@ -16,12 +16,17 @@ unexpected browser origins. Put the worker on a private network or VPN; do not e
 port 8743 directly to the public internet. There is no per-project identity, quota, or
 multi-tenant isolation in this release.
 
-On Windows, agent secrets and each queued job's MinIO credentials are encrypted with
+On Windows, agent secrets and each queued job's S3 or GitHub credentials are encrypted with
 DPAPI for the current user. These are not protected against code running as that same
-user or an administrator. Logs redact the supplied MinIO credential strings; arbitrary
-secrets printed by project code cannot be recognized automatically. Completed uploads
+user or an administrator. Logs redact supplied publication credentials; arbitrary
+secrets printed by project code cannot be recognized automatically. Completed jobs
 remove the encrypted job specification and source files. Upload failures retain the
 specification so they can be retried; retention cleanup removes it with the job.
+
+Local builds and sender downloads need no publication credentials. Result downloads
+require the remote agent key and pinned TLS connection. Only the retained result
+ZIP is served; source snapshots and saved settings have no download endpoint.
+The sender verifies its size and SHA-256 and never overwrites an existing file.
 
 Snapshots omit ignored files, common caches, dotenv files, and common private-key
 formats by default. `snapshotIncludes` is an explicit override for exact tracked source

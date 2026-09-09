@@ -7,12 +7,15 @@ flowchart LR
     U[Local settings window] -->|Loopback + separate key| A
     A --> Q[Persistent FIFO queue]
     Q --> B[Fresh source directory + managed tools]
-    B --> M[MinIO: artifacts, checksums, manifest]
+    B --> R[Retained artifacts and verified result ZIP]
+    R -->|Authenticated download| C
+    R -->|Optional| M[S3: artifacts, checksums, manifest]
+    R -->|Optional| P[GitHub release asset]
     G[GitHub Releases] -->|Signed update| A
 ```
 
 The single Go executable contains the HTTP server, sender CLI, WebView2 host,
-HTML/CSS/JavaScript settings UI, tool provisioning scripts, S3 client, and updater.
+HTML/CSS/JavaScript settings UI, tool provisioning scripts, S3/GitHub publishers, and updater.
 Windows has no Node, Python, Rust, Go, Docker, or Git-account requirement to run it.
 Flutter, Microsoft C++ Build Tools/Windows SDK, and Inno Setup remain real build-time
 dependencies and are provisioned separately on first use.
@@ -25,7 +28,9 @@ dependencies and are provisioned separately on first use.
 `internal/update` verifies and installs publisher-signed releases.
 
 One build or setup operation runs at a time. Up to four source transfers can run
-concurrently; shutdown and updates wait for incoming archives as well as accepted jobs. Up to 20 active jobs may be queued. A job
+concurrently, alongside up to four result downloads. Shutdown and updates wait for
+transfers as well as accepted jobs; retention skips jobs with active downloads.
+Up to 20 active jobs may be queued. A job
 has a four-hour timeout; explicit tool setup has a two-hour timeout. Source ZIPs are
 limited to 2 GiB, 100,000 entries, and 8 GiB extracted. Extraction rejects traversal,
 symlinks, NTFS alternate streams, device names, and case-insensitive duplicate paths.
@@ -34,8 +39,11 @@ This prevents archive damage; executing project code is still fully trusted.
 A per-data-directory OS lock prevents duplicate workers, including after a crash.
 Queued jobs survive restart. An interrupted running job becomes failed; a caller must
 submit it again. Finished binaries survive an upload failure, and retry only repeats
-the upload. Artifacts are verified against their hashes before upload. Checksums and
-the manifest are written last, so a manifest never advertises a partially uploaded set.
+the upload. Artifacts are verified against their hashes before upload. Local jobs
+finish without publication credentials. All modes retain a deterministic result ZIP
+with size and SHA-256 in public job metadata. S3 uploads checksums and manifest last.
+GitHub receives the ZIP under a unique job asset name; new releases stay in draft
+until upload completes. See [result delivery](publication.md) for retries and retention.
 
 The application runs for the signed-in user. Closing settings leaves the background
 worker alive. The worker owns the Windows tray icon and its native message loop,

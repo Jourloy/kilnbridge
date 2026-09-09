@@ -45,7 +45,7 @@ func run(args []string) error {
 			platform.AttachConsole()
 			fmt.Println("Kilnbridge " + version)
 			return nil
-		case "submit", "status", "wait", "cancel", "retry-upload", "snapshot":
+		case "submit", "status", "wait", "cancel", "retry-upload", "download", "snapshot":
 			platform.AttachConsole()
 			return clientCommand(args[0], args[1:])
 		case "keygen", "sign-release":
@@ -79,7 +79,7 @@ func run(args []string) error {
 		return e
 	}
 	if f.NArg() != 0 {
-		return errors.New("unknown command; use submit, status, wait, cancel, retry-upload, snapshot, or version")
+		return errors.New("unknown command; use submit, status, wait, cancel, retry-upload, download, snapshot, or version")
 	}
 	if *dir == "" {
 		p, e := platform.DataDir()
@@ -164,17 +164,22 @@ func startInstalledUI(exe, dir string) error {
 
 func clientCommand(command string, args []string) error {
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
-	envPath := f.String("env", "", "literal dotenv file with agent and MinIO settings")
+	envPath := f.String("env", "", "literal dotenv file with agent and optional publication credentials")
 	source := f.String("source", ".", "Git working directory to snapshot")
 	recipe := f.String("recipe", "", "Windows build recipe JSON (flutter, tauri, electron, dotnet, custom)")
 	id := f.String("job", "", "job ID")
 	detach := f.Bool("detach", false, "return after the agent accepts the job")
 	allowDirty := f.Bool("allow-dirty", false, "include uncommitted source changes")
-	output := f.String("output", "source.zip", "snapshot output path")
+	output := f.String("output", "", "snapshot or downloaded result ZIP path")
+	download := f.Bool("download", false, "download the result after submit/wait, even with external publication")
+	publish := f.String("publish", "", "override recipe publication: local, download, s3, github")
 	if e := f.Parse(args); e != nil {
 		return e
 	}
 	if command == "snapshot" {
+		if *output == "" {
+			*output = "source.zip"
+		}
 		sha, dirty, digest, e := client.Snapshot(*source, *output)
 		if e != nil {
 			return e
@@ -196,7 +201,14 @@ func clientCommand(command string, args []string) error {
 			return errors.New("--job must be a job UUID")
 		}
 		if command == "wait" {
-			return c.Wait(ctx, *id, os.Stdout)
+			return waitAndDownload(ctx, c, *id, *output, *download)
+		}
+		if command == "download" {
+			file, err := c.Download(ctx, *id, *output)
+			if err == nil {
+				fmt.Println("Downloaded and verified:", file)
+			}
+			return err
 		}
 		route := "/v1/jobs/" + *id
 		method := "GET"
@@ -221,7 +233,12 @@ func clientCommand(command string, args []string) error {
 	if e = json.Unmarshal(b, &s); e != nil {
 		return e
 	}
-	s.Storage = client.StorageFromEnv(env)
+	if *publish != "" {
+		s.Publish = *publish
+	}
+	if e = client.PublicationFromEnv(&s, env); e != nil {
+		return e
+	}
 	if v := client.Env(env, "API_URL"); v != "" {
 		s.APIURL = v
 	}
@@ -279,7 +296,29 @@ func clientCommand(command string, args []string) error {
 	if *detach {
 		return nil
 	}
-	return c.Wait(ctx, j.ID, os.Stdout)
+	return waitAndDownload(ctx, c, j.ID, *output, *download)
+}
+
+func waitAndDownload(ctx context.Context, c *client.Client, id, output string, force bool) error {
+	waitErr := c.Wait(ctx, id, os.Stdout)
+	if ctx.Err() != nil {
+		return waitErr
+	}
+	j, err := c.Job(ctx, id)
+	if err != nil {
+		if waitErr != nil {
+			return waitErr
+		}
+		return err
+	}
+	if (force || j.Publish == "download") && (j.Result != nil || waitErr == nil) {
+		file, err := c.Download(ctx, id, output)
+		if err != nil {
+			return fmt.Errorf("job %s remains on the agent; retry with the download command: %w", id, err)
+		}
+		fmt.Println("Downloaded and verified:", file)
+	}
+	return waitErr
 }
 
 func releaseCommand(command string, args []string) error {

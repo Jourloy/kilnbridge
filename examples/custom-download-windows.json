@@ -1,0 +1,42 @@
+{
+  "recipe": "custom",
+  "project": "my-app",
+  "workDir": ".",
+  "version": "1.2.3",
+  "buildNumber": "1",
+  "skipTests": false,
+  "commands": [
+    {
+      "run": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/build.ps1"
+      ]
+    }
+  ],
+  "testCommands": [
+    {
+      "run": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/test.ps1"
+      ]
+    }
+  ],
+  "artifacts": [
+    "dist/setup.msi",
+    "dist/app.zip",
+    "bin/my-cli.exe",
+    "lib",
+    "reports"
+  ],
+  "publish": "download"
+}

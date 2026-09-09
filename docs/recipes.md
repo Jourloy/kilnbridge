@@ -78,6 +78,12 @@ one test command unless tests are explicitly skipped. A command failure stops th
 job before packaging or upload. Cancellation uses the same process-tree cleanup as
 Flutter builds. Limit: 64 commands total, 128 arguments per command.
 
+## Result delivery
+
+Set `publish` to `local`, `download`, `s3`, or `github`. Without storage settings,
+recipes complete locally. See [publication and downloads](publication.md) for the
+credential-free flow, sender downloads, S3 compatibility, and GitHub release setup.
+
 ## Artifacts
 
 Every recipe supports an optional `artifacts` array of exact file and directory
@@ -96,8 +102,9 @@ libraries, and test reports directly. For example:
 
 See [the complete custom recipe](../examples/custom-artifacts-windows.json).
 Selected files are copied without changing their bytes or extensions. Directories
-expand recursively; every nested file is published under its original path, such
-as `PREFIX/JOB_UUID/lib/core.dll` or `PREFIX/JOB_UUID/reports/junit.xml`. Empty nested
+expand recursively; every nested file is published under its original path, in S3 such
+as `PREFIX/JOB_UUID/lib/core.dll` or `PREFIX/JOB_UUID/reports/junit.xml`. Sender downloads
+and GitHub releases wrap these same paths and the metadata in one result ZIP. Empty nested
 directories have no S3 objects. Each file is recorded in `manifest.json` and
 `SHA256SUMS.txt`; the manifest is uploaded last, after every file and checksum.
 Retained copies allow upload retries without rebuilding or reading source files.

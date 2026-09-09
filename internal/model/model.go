@@ -27,28 +27,37 @@ type Command struct {
 	Args []string `json:"args,omitempty"`
 }
 
+type GitHubRelease struct {
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+	Draft      bool   `json:"draft,omitempty"`
+	Token      string `json:"token,omitempty"`
+}
+
 type Spec struct {
-	ArtifactPaths    []string  `json:"artifacts,omitempty"`
-	Recipe           string    `json:"recipe,omitempty"`
-	Commands         []Command `json:"commands,omitempty"`
-	TestCommands     []Command `json:"testCommands,omitempty"`
-	OutputDir        string    `json:"outputDir,omitempty"`
-	SnapshotIncludes []string  `json:"snapshotIncludes,omitempty"`
-	Project          string    `json:"project"`
-	WorkDir          string    `json:"workDir"`
-	FlutterVersion   string    `json:"flutterVersion"`
-	Version          string    `json:"version"`
-	BuildNumber      string    `json:"buildNumber"`
-	SourceSHA        string    `json:"sourceSha"`
-	SourceDirty      bool      `json:"sourceDirty"`
-	ArchiveSHA256    string    `json:"archiveSha256"`
-	APIURL           string    `json:"apiUrl"`
-	TestPaths        []string  `json:"testPaths,omitempty"`
-	SkipTests        bool      `json:"skipTests"`
-	SkipCodegen      bool      `json:"skipCodegen,omitempty"`
-	PrepareScripts   []string  `json:"prepareScripts,omitempty"`
-	InstallerScript  string    `json:"installerScript,omitempty"`
-	Storage          Storage   `json:"storage"`
+	Publish          string        `json:"publish,omitempty"`
+	GitHub           GitHubRelease `json:"github,omitzero"`
+	ArtifactPaths    []string      `json:"artifacts,omitempty"`
+	Recipe           string        `json:"recipe,omitempty"`
+	Commands         []Command     `json:"commands,omitempty"`
+	TestCommands     []Command     `json:"testCommands,omitempty"`
+	OutputDir        string        `json:"outputDir,omitempty"`
+	SnapshotIncludes []string      `json:"snapshotIncludes,omitempty"`
+	Project          string        `json:"project"`
+	WorkDir          string        `json:"workDir"`
+	FlutterVersion   string        `json:"flutterVersion"`
+	Version          string        `json:"version"`
+	BuildNumber      string        `json:"buildNumber"`
+	SourceSHA        string        `json:"sourceSha"`
+	SourceDirty      bool          `json:"sourceDirty"`
+	ArchiveSHA256    string        `json:"archiveSha256"`
+	APIURL           string        `json:"apiUrl"`
+	TestPaths        []string      `json:"testPaths,omitempty"`
+	SkipTests        bool          `json:"skipTests"`
+	SkipCodegen      bool          `json:"skipCodegen,omitempty"`
+	PrepareScripts   []string      `json:"prepareScripts,omitempty"`
+	InstallerScript  string        `json:"installerScript,omitempty"`
+	Storage          Storage       `json:"storage,omitzero"`
 }
 
 var VersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$`)
@@ -106,23 +115,7 @@ func (s *Spec) Validate() error {
 	if s.InstallerScript != "" && (!Relative(s.InstallerScript) || !strings.HasSuffix(strings.ToLower(s.InstallerScript), ".iss")) {
 		return errors.New("installerScript must be a relative .iss path")
 	}
-	u, err = url.Parse(s.Storage.Endpoint)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return errors.New("storage.endpoint must be an HTTPS origin")
-	}
-	if !regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`).MatchString(s.Storage.Bucket) || s.Storage.AccessKey == "" || s.Storage.SecretKey == "" {
-		return errors.New("storage bucket and credentials are required")
-	}
-	if s.Storage.Region == "" {
-		s.Storage.Region = "us-east-1"
-	}
-	if s.Storage.Prefix == "" {
-		s.Storage.Prefix = "release-candidates"
-	}
-	if !Relative(s.Storage.Prefix) || s.Storage.Prefix == "." {
-		return errors.New("storage.prefix must be a relative object prefix")
-	}
-	return nil
+	return s.ValidatePublication()
 }
 
 type Artifact struct {
@@ -130,7 +123,15 @@ type Artifact struct {
 	SHA256 string `json:"sha256"`
 }
 
+type Result struct {
+	Name   string `json:"name"`
+	SHA256 string `json:"sha256"`
+	Size   int64  `json:"size"`
+}
+
 type Job struct {
+	Publish     string     `json:"publish,omitempty"`
+	Result      *Result    `json:"result,omitempty"`
 	ID          string     `json:"id"`
 	Project     string     `json:"project"`
 	Version     string     `json:"version"`
