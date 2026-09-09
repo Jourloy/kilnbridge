@@ -106,9 +106,17 @@ func RunCommand(ctx context.Context, cmd *exec.Cmd, log func(string)) error {
 }
 
 func (r Runner) Build(ctx context.Context, jobDir, id string, s model.Spec) ([]model.Artifact, error) {
-	r.stage("Preparing tools")
-	if err := r.Prepare(ctx, s.FlutterVersion); err != nil {
+	if err := s.ValidateRecipe(); err != nil {
 		return nil, err
+	}
+	if s.Recipe == "flutter" {
+		r.stage("Preparing Flutter tools")
+		if s.FlutterVersion == "" {
+			s.FlutterVersion = model.DefaultFlutterVersion
+		}
+		if err := r.Prepare(ctx, s.FlutterVersion); err != nil {
+			return nil, err
+		}
 	}
 	r.stage("Extracting source snapshot")
 	archive := filepath.Join(jobDir, "source.zip")
@@ -124,6 +132,9 @@ func (r Runner) Build(ctx context.Context, jobDir, id string, s model.Spec) ([]m
 		return nil, err
 	}
 	work := filepath.Join(source, filepath.FromSlash(s.WorkDir))
+	if s.Recipe != "flutter" {
+		return r.buildRecipe(ctx, jobDir, work, id, s)
+	}
 	b, err := os.ReadFile(filepath.Join(work, "pubspec.yaml"))
 	if err != nil {
 		return nil, err
@@ -235,7 +246,11 @@ func Manifest(out, id string, s model.Spec) ([]model.Artifact, error) {
 	if s.SkipTests {
 		testStatus = "skipped"
 	}
-	m := map[string]any{"buildId": id, "sourceSha": s.SourceSHA, "sourceDirty": s.SourceDirty, "sourceArchiveSha256": s.ArchiveSHA256, "version": s.Version, "buildNumber": s.BuildNumber, "platform": "windows", "platforms": map[string]string{"windows": "success", "android": "skipped"}, "testStatus": testStatus, "artifacts": artifacts}
+	recipe := s.Recipe
+	if recipe == "" {
+		recipe = "flutter"
+	}
+	m := map[string]any{"recipe": recipe, "buildId": id, "sourceSha": s.SourceSHA, "sourceDirty": s.SourceDirty, "sourceArchiveSha256": s.ArchiveSHA256, "version": s.Version, "buildNumber": s.BuildNumber, "platform": "windows", "platforms": map[string]string{"windows": "success", "android": "skipped"}, "testStatus": testStatus, "artifacts": artifacts}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return nil, err

@@ -22,23 +22,32 @@ type Storage struct {
 	Prefix       string `json:"prefix,omitempty"`
 }
 
+type Command struct {
+	Run  string   `json:"run"`
+	Args []string `json:"args,omitempty"`
+}
+
 type Spec struct {
-	SnapshotIncludes []string `json:"snapshotIncludes,omitempty"`
-	Project          string   `json:"project"`
-	WorkDir          string   `json:"workDir"`
-	FlutterVersion   string   `json:"flutterVersion"`
-	Version          string   `json:"version"`
-	BuildNumber      string   `json:"buildNumber"`
-	SourceSHA        string   `json:"sourceSha"`
-	SourceDirty      bool     `json:"sourceDirty"`
-	ArchiveSHA256    string   `json:"archiveSha256"`
-	APIURL           string   `json:"apiUrl"`
-	TestPaths        []string `json:"testPaths,omitempty"`
-	SkipTests        bool     `json:"skipTests"`
-	SkipCodegen      bool     `json:"skipCodegen,omitempty"`
-	PrepareScripts   []string `json:"prepareScripts,omitempty"`
-	InstallerScript  string   `json:"installerScript,omitempty"`
-	Storage          Storage  `json:"storage"`
+	Recipe           string    `json:"recipe,omitempty"`
+	Commands         []Command `json:"commands,omitempty"`
+	TestCommands     []Command `json:"testCommands,omitempty"`
+	OutputDir        string    `json:"outputDir,omitempty"`
+	SnapshotIncludes []string  `json:"snapshotIncludes,omitempty"`
+	Project          string    `json:"project"`
+	WorkDir          string    `json:"workDir"`
+	FlutterVersion   string    `json:"flutterVersion"`
+	Version          string    `json:"version"`
+	BuildNumber      string    `json:"buildNumber"`
+	SourceSHA        string    `json:"sourceSha"`
+	SourceDirty      bool      `json:"sourceDirty"`
+	ArchiveSHA256    string    `json:"archiveSha256"`
+	APIURL           string    `json:"apiUrl"`
+	TestPaths        []string  `json:"testPaths,omitempty"`
+	SkipTests        bool      `json:"skipTests"`
+	SkipCodegen      bool      `json:"skipCodegen,omitempty"`
+	PrepareScripts   []string  `json:"prepareScripts,omitempty"`
+	InstallerScript  string    `json:"installerScript,omitempty"`
+	Storage          Storage   `json:"storage"`
 }
 
 var VersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$`)
@@ -59,10 +68,13 @@ func (s *Spec) Validate() error {
 	if !Relative(s.WorkDir) {
 		return errors.New("workDir must be relative to the archive")
 	}
-	if s.FlutterVersion == "" {
+	if err := s.ValidateRecipe(); err != nil {
+		return err
+	}
+	if s.Recipe == "flutter" && s.FlutterVersion == "" {
 		s.FlutterVersion = DefaultFlutterVersion
 	}
-	if !regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(s.FlutterVersion) {
+	if s.Recipe == "flutter" && !regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(s.FlutterVersion) {
 		return errors.New("flutterVersion must be an exact stable version")
 	}
 	if !VersionPattern.MatchString(s.Version) || !regexp.MustCompile(`^[0-9]{1,9}$`).MatchString(s.BuildNumber) {
@@ -72,7 +84,7 @@ func (s *Spec) Validate() error {
 		return errors.New("sourceSha and archiveSha256 must be hexadecimal digests")
 	}
 	u, err := url.Parse(s.APIURL)
-	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+	if s.APIURL != "" && (err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil) {
 		return errors.New("apiUrl must be an HTTP(S) URL without embedded credentials")
 	}
 	for _, p := range append(append([]string{}, s.PrepareScripts...), s.TestPaths...) {

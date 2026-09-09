@@ -1,0 +1,9 @@
+{
+  "recipe": "dotnet",
+  "project": "my-app",
+  "workDir": ".",
+  "version": "1.2.3",
+  "buildNumber": "1",
+  "skipTests": false,
+  "outputDir": "publish"
+}

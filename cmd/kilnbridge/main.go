@@ -166,7 +166,7 @@ func clientCommand(command string, args []string) error {
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
 	envPath := f.String("env", "", "literal dotenv file with agent and MinIO settings")
 	source := f.String("source", ".", "Git working directory to snapshot")
-	recipe := f.String("recipe", "", "Flutter Windows recipe JSON")
+	recipe := f.String("recipe", "", "Windows build recipe JSON (flutter, tauri, electron, dotnet, custom)")
 	id := f.String("job", "", "job ID")
 	detach := f.Bool("detach", false, "return after the agent accepts the job")
 	allowDirty := f.Bool("allow-dirty", false, "include uncommitted source changes")
@@ -231,7 +231,7 @@ func clientCommand(command string, args []string) error {
 	if !model.Relative(s.WorkDir) {
 		return errors.New("recipe workDir must be relative")
 	}
-	if s.Version == "" || s.BuildNumber == "" {
+	if (s.Recipe == "" || s.Recipe == "flutter") && (s.Version == "" || s.BuildNumber == "") {
 		b, e = os.ReadFile(filepath.Join(*source, filepath.FromSlash(s.WorkDir), "pubspec.yaml"))
 		if e != nil {
 			return e
@@ -241,8 +241,12 @@ func clientCommand(command string, args []string) error {
 				value := strings.Trim(strings.TrimSpace(strings.SplitN(strings.TrimPrefix(line, "version:"), "#", 2)[0]), "\"'")
 				v, n, ok := strings.Cut(value, "+")
 				if ok {
-					s.Version = v
-					s.BuildNumber = n
+					if s.Version == "" {
+						s.Version = v
+					}
+					if s.BuildNumber == "" {
+						s.BuildNumber = n
+					}
 				}
 				break
 			}

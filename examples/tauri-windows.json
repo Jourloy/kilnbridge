@@ -1,0 +1,9 @@
+{
+  "recipe": "tauri",
+  "project": "my-app",
+  "workDir": ".",
+  "version": "1.2.3",
+  "buildNumber": "1",
+  "skipTests": false,
+  "outputDir": "src-tauri/target/x86_64-pc-windows-msvc/release/bundle"
+}

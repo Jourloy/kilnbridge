@@ -23,9 +23,10 @@ No GitHub account, repository access, or manual package setup is needed on the w
 - Retry a failed upload without compiling again.
 - Download publisher-signed GitHub updates in the background, install while idle, and roll back if the new worker fails to start.
 
-The current recipe builds **Flutter Windows x64**. Android can continue building on
+Recipes build **Flutter, Tauri, Electron, .NET, or custom projects for Windows x64**.
+One agent can process different recipes in the same queue. Android can continue building on
 your development machine with your existing signing setup; the example below runs
-both from one script. Other frameworks and native Windows ARM64 are not implemented.
+both from one script. Native Windows ARM64 builds are not implemented.
 
 ## 1. Prepare the Windows PC
 
@@ -156,21 +157,31 @@ tests are recorded as `skipped`, never as a successful test run.
 
 ## Recipes
 
+Choose [Flutter](examples/flutter-windows.json), [Tauri](examples/tauri-windows.json),
+[Electron](examples/electron-windows.json), [.NET](examples/dotnet-windows.json), or
+[custom commands](examples/custom-windows.json). Use updated sender and agent binaries
+for non-Flutter recipes. See [recipe setup and commands](docs/recipes.md) for tool
+requirements, examples, output packaging, and custom tests.
+
 | Field | Purpose |
 | --- | --- |
+| `recipe` | `flutter` (default), `tauri`, `electron`, `dotnet`, or `custom` |
 | `project` | Filename-safe release name |
-| `workDir` | Flutter directory inside the ZIP; default `.` |
+| `workDir` | Project directory inside the ZIP; default `.` |
 | `flutterVersion` | Exact stable version; default `3.41.6` |
-| `version`, `buildNumber` | Optional sender overrides; must match `pubspec.yaml` |
+| `version`, `buildNumber` | Required for non-Flutter; Flutter infers missing values from `pubspec.yaml` |
 | `apiUrl` | Flutter `API_URL` define; overridden by `API_URL` in the environment |
 | `prepareScripts` | Project-relative `.ps1` files, executed in order before dependency restore |
 | `skipCodegen` | Set `true` for projects without `build_runner`; default `false` |
 | `testPaths` | Selected project-relative tests; omitted means `flutter test` |
 | `skipTests` | Explicitly skip tests and mark the manifest accordingly; default `false` |
 | `installerScript` | Optional project-relative Inno `.iss`; receives `MyAppVersion` |
+| `commands` | Custom recipe executable/argument objects, run in order |
+| `testCommands` | Non-Flutter test commands; overrides preset tests |
+| `outputDir` | Non-Flutter directory relative to `workDir`, packaged recursively as ZIP |
 | `snapshotIncludes` | Exact source-relative file exceptions to the sender's default filter |
 
-Paths use `/` and must stay inside the source tree. Scripts run with the Flutter
+Paths use `/` and must stay inside the source tree. Scripts run with the selected
 project as their working directory. MinIO credentials are passed to the agent, not as
 command-line arguments or environment variables to build processes. Because build code
 runs as the same user, this is not a credential isolation boundary.

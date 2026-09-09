@@ -49,8 +49,8 @@ The sender computes it locally and records dirty snapshots explicitly. Optional
 `storage.sessionToken` supports temporary S3 credentials.
 
 A caller can create and transfer its own ZIP without Git on either machine. The source
-must include the Flutter Windows project, `pubspec.yaml`, `pubspec.lock`, preparation
-scripts, tests, and required assets. No credentials or source URLs are fetched by the
+must include the files required by the selected recipe, preparation scripts, tests,
+and required assets. Flutter needs `pubspec.yaml`, `pubspec.lock` and its Windows project. No credentials or source URLs are fetched by the
 worker. See the README for optional recipe fields.
 
 Successful submission returns **202** and a public job object:
@@ -70,6 +70,21 @@ Successful submission returns **202** and a public job object:
 The request is complete only after the archive hash is checked and the job is saved.
 There is no idempotency key in v1. If a connection drops before receiving the response,
 check `GET /v1/jobs` before resubmitting to avoid duplicates.
+
+## Universal recipes
+
+`spec.recipe` selects `flutter` (the backward-compatible default), `tauri`,
+`electron`, `dotnet`, or `custom`. Non-Flutter recipes require `version` and
+`buildNumber`; they do not require `pubspec.yaml`, `apiUrl`, or a Flutter SDK.
+`outputDir` is relative to `workDir`. Custom `commands` and optional non-Flutter
+`testCommands` are arrays of `{ "run": "executable", "args": ["argument"] }`.
+Unknown recipe names, empty custom commands, unsafe output paths and Flutter-only
+fields on other recipes are rejected. Custom recipes must provide tests or
+explicitly set `skipTests: true`. See [recipe documentation](recipes.md).
+
+The manifest includes `recipe` and records `testStatus`. Non-Flutter output
+files (including nested installers) are packaged into one ZIP, then uploaded
+with checksums and a manifest through the same job lifecycle.
 
 ## Read and control jobs
 
