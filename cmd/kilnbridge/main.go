@@ -25,7 +25,7 @@ import (
 	"github.com/jourloy/kilnbridge/internal/update"
 )
 
-var version = "0.1.1"
+var version = "0.2.0"
 
 func main() {
 	e := run(os.Args[1:])
