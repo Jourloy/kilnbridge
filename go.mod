@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/minio/minio-go/v7 v7.3.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.50.0
 )
 
 require (
